@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Iniciando Manual...</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; color: #0033A0; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #00AD68; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        a { color: #00AD68; font-weight: bold; text-decoration: none; border: 1px solid #00AD68; padding: 10px 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="loader"></div>
+    <p>Abrindo o Manual do Usuário...</p>
+    <p style="font-size: 0.8rem; color: #666;">Caso não abra automaticamente, <a href="_Sistema/manual.html">clique aqui para abrir</a></p>
+
+    <script>
+        // Tenta redirecionar imediatamente
+        window.location.replace("_Sistema/manual.html");
+    </script>
+</body>
+</html>

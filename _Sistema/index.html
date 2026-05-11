@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tecpar Dashboard | Power BI Experience</title>
+
+    <!-- Fontes Oficiais TECPAR (Montserrat e Roboto) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Folha de Estilos -->
+    <link rel="stylesheet" href="style.css?v=20260508e">
+    <link rel="shortcut icon" href="Imagem/favicon.png" type="image/x-icon">
+    <link rel="icon" href="Imagem/favicon.png" type="image/png">
+
+    <!-- Bibliotecas Externas via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body>
+
+    <!-- Overlay global de carregamento (oculto por padrão) -->
+    <div id="loading-overlay" class="loading-overlay" style="display:none;" role="status" aria-live="polite">
+        <div class="loading-content">
+            <div class="loading-spinner" aria-hidden="true"></div>
+            <div class="loading-text" id="loading-text">Processando dados...</div>
+            <div class="loading-progress" id="loading-progress"></div>
+            <div class="loading-bar-track" aria-hidden="true">
+                <div class="loading-bar-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PBI Top Navbar -->
+    <nav class="pbi-navbar">
+        <div class="nav-left">
+            <img src="Imagem/logotecpar.webp" alt="Tecpar" style="height: 65px; background-color: transparent; filter: brightness(0) invert(1); margin-right: 15px;" />
+            <span class="app-title" style="font-family: 'Montserrat', sans-serif; font-weight: 600;">| Planejamento Estratégico</span>
+        </div>
+        <div class="nav-right">
+            <!-- Botão de Upload Base -->
+            <label for="csvFileInput" class="btn-import">
+                Carregar Base(s) de Dados
+            </label>
+            <input type="file" id="csvFileInput" accept=".csv, .txt" multiple style="display: none;" />
+            <!-- Botão de Upload Meta -->
+            <label for="csvMetaInput" class="btn-import btn-meta">
+                Carregar Metas Anuais
+            </label>
+            <input type="file" id="csvMetaInput" accept=".csv, .txt" multiple style="display: none;" />
+            <!-- Botão de Upload OVs -->
+            <label for="csvOVInput" class="btn-import btn-ov" style="background-color: var(--tecpar-orange); border-color: transparent;">
+                Carregar OVs
+            </label>
+            <input type="file" id="csvOVInput" accept=".csv, .txt" style="display: none;" />
+            <!-- Botão de Upload Classificação Setorial -->
+            <label for="csvSetorInput" class="btn-import btn-setor" style="background-color: #6c757d; border-color: transparent;" title="CSV com CNPJRaiz e Setor para corrigir classificação Público/Privado">
+                Classif. Setorial
+            </label>
+            <input type="file" id="csvSetorInput" accept=".csv, .txt" style="display: none;" />
+            <button type="button" id="devLoadDataBtn" class="btn-import btn-dev-load dev-only">
+                Carregar Dados de Teste
+            </button>
+            <!-- Botão Manual de Uso -->
+            <a href="manual.html" target="_blank" class="btn-import" style="background-color: #ffffff; color: var(--tecpar-blue); border-color: #ffffff; font-weight: 700;">
+                📖 Manual de Uso
+            </a>
+        </div>
+    </nav>
+
+    <!-- Container principal: sidebar + canvas -->
+    <div class="app-container">
+
+        <!-- ======================================================= -->
+        <!-- SIDEBAR ESQUERDA — Filtros no estilo Power BI            -->
+        <!-- ======================================================= -->
+        <aside class="filter-pane">
+            <div class="filter-pane-header">
+                <div class="filter-pane-title-row">
+                    <h3>Filtros neste painel</h3>
+                    <button type="button" id="toggle-filters-btn" class="filter-toggle-btn" aria-expanded="true" aria-controls="dashboard-filters">
+                        Ocultar
+                    </button>
+                </div>
+                <p id="file-status">Dados: Aguardando...</p>
+                <p id="meta-status">Metas: Aguardando...</p>
+                <p id="ov-status">OVs: Aguardando...</p>
+                <p id="setor-status">Setor: heurística</p>
+            </div>
+
+            <div class="filters" id="dashboard-filters">
+                <div class="filter-group">
+                    <label>Ano de Análise</label>
+                    <select id="filter-ano">
+                        <option value="ALL">Carregue suas Bases</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Centro de Custo (Referência)</label>
+                    <div id="filter-centro-container" class="checkbox-list" style="max-height: 150px; overflow-y: auto; padding-right: 5px;">
+                        <span style="font-size: 12px; color: #8a8886;">Importe os dados primeiro</span>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label>Meses Selecionados</label>
+                    <div id="filter-mes-container" class="checkbox-list">
+                        <span style="font-size: 12px; color: #8a8886;">Importe os dados primeiro</span>
+                    </div>
+                </div>
+
+                <!-- Filtros Adicionais (UF e Clientes) -->
+                <div id="sidebar-conditional-filters" style="display: block;">
+                    <div class="filter-group">
+                        <label>UF (Estado)</label>
+                        <select id="filter-uf">
+                            <option value="ALL">Selecionar Tudo</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Filtrar Clientes</label>
+                        <div id="filter-cliente-container" class="checkbox-list" style="max-height: 200px; overflow-y: auto; padding-right: 5px;">
+                            <span style="font-size: 12px; color: #8a8886;">Importe os dados primeiro</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="user-block">
+                <span>Versão 2.0</span>
+            </div>
+        </aside>
+
+        <!-- ======================================================= -->
+        <!-- CANVAS PRINCIPAL — Relatório                             -->
+        <!-- ======================================================= -->
+        <main class="main-canvas">
+
+            <!-- Sistema de Abas -->
+            <div class="tab-navigation">
+                <button class="tab-btn active" data-tab="tab-faturamento" onclick="switchTab('tab-faturamento', this)">
+                    📊 Faturamento
+                </button>
+                <button class="tab-btn" data-tab="tab-clientes" onclick="switchTab('tab-clientes', this)">
+                    👥 Inteligência de Clientes
+                </button>
+                <button class="tab-btn" data-tab="tab-fidelidade" onclick="switchTab('tab-fidelidade', this)">
+                    🔁 Fidelidade
+                </button>
+                <button class="tab-btn" data-tab="tab-config" onclick="switchTab('tab-config', this)">
+                    ⚙️ Configurações
+                </button>
+            </div>
+
+            <!-- ======= ABA 1: FATURAMENTO ======= -->
+            <div id="tab-faturamento" class="tab-content active">
+
+            <header class="report-header">
+                <h1>Faturamento Agregado</h1>
+                <p>Métricas principais do período filtrado</p>
+            </header>
+
+            <!-- Banner de contexto: atualizado dinamicamente por updateContextBanner() -->
+            <div id="context-banner" class="context-banner" style="display:none;">
+                <span class="context-banner-icon">📊</span>
+                <span id="context-banner-text"></span>
+            </div>
+
+            <!-- --------------------------------------------------- -->
+            <!-- CARDS KPI                                            -->
+            <!-- --------------------------------------------------- -->
+            <section class="kpi-grid">
+
+                <div class="pbi-card kpi-card">
+                    <span class="kpi-title">Faturamento Total</span>
+                    <div class="kpi-value" id="kpi-faturamento">R$ 0,00</div>
+                    <div class="kpi-trend" id="kpi-meta-faturamento" style="font-size: 11px; margin-bottom: 2px;">Meta: Sem arquivo de metas</div>
+                    <div class="kpi-trend" id="kpi-yoy-faturamento" style="font-size: 11px; color: #605E5C;">Ano Ant.: Selecione na caixa Ano</div>
+                </div>
+
+                <div class="pbi-card kpi-card">
+                    <span class="kpi-title">Volume (Qtd. Executada)</span>
+                    <div class="kpi-value" id="kpi-quantidade">0</div>
+                    <div class="kpi-trend" id="kpi-meta-quantidade" style="font-size: 11px; margin-bottom: 2px;">Planejados: Sem arquivo de metas</div>
+                    <div class="kpi-trend" id="kpi-yoy-quantidade" style="font-size: 11px; color: #605E5C;">Ano Ant.: Selecione na caixa Ano</div>
+                </div>
+
+                <div class="pbi-card kpi-card">
+                    <span class="kpi-title">Ticket Médio Geral</span>
+                    <div class="kpi-value" id="kpi-ticket">R$ 0,00</div>
+                    <div class="kpi-trend">Por Unidade</div>
+                </div>
+
+                <div class="pbi-card kpi-card" style="text-align: center;">
+                    <span class="kpi-title">Família Líder em Faturamento</span>
+                    <div class="kpi-value kpi-small-text" id="kpi-familia" style="margin-top: 5px;">-</div>
+                    <div class="kpi-trend">No escopo do filtro</div>
+                </div>
+
+                <!-- Card azul: Faturamento / Meta -->
+                <div class="pbi-card kpi-card" style="background-color: #BDD7EE; border-bottom: 4px solid #4472C4; display: flex; flex-direction: column; justify-content: center;">
+                    <span class="kpi-title" id="kpi-prog-meta-title" style="font-weight: 700; color: #1F4E79; text-align: center; margin-bottom: 12px; font-size: 13px;">Faturamento/Meta</span>
+                    <div style="width: 100%; text-align: left; background: rgba(255,255,255,0.4); padding: 8px; border-radius: 4px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 6px; border-bottom: 1px solid rgba(0,0,0,0.1);">
+                            <span>Parcial (%):</span><strong id="kpi-prog-meta-parcial">-</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px; padding-top: 6px;">
+                            <span id="kpi-prog-meta-acum-lbl">Acumulado (%):</span><strong id="kpi-prog-meta-acum">-</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card laranja: Faturamento Ano/Anterior -->
+                <div class="pbi-card kpi-card" style="background-color: #F8CBAD; border-bottom: 4px solid #C65911; display: flex; flex-direction: column; justify-content: center;">
+                    <span class="kpi-title" id="kpi-prog-yoy-title" style="font-weight: 700; color: #833C0C; text-align: center; margin-bottom: 12px; font-size: 13px;">Faturamento Ano/Ant.</span>
+                    <div style="width: 100%; text-align: left; background: rgba(255,255,255,0.4); padding: 8px; border-radius: 4px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 6px; border-bottom: 1px solid rgba(0,0,0,0.1);">
+                            <span>Parcial (%):</span><strong id="kpi-prog-yoy-parcial">-</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px; padding-top: 6px;">
+                            <span id="kpi-prog-yoy-acum-lbl" style="font-size: 12px;">Acum. Antigo (%):</span><strong id="kpi-prog-yoy-acum">-</strong>
+                        </div>
+                    </div>
+                </div>
+
+            </section><!-- /kpi-grid -->
+
+            <!-- --------------------------------------------------- -->
+            <!-- GRÁFICOS PRINCIPAIS                                  -->
+            <!-- --------------------------------------------------- -->
+            <section class="charts-section">
+
+                <div class="pbi-card span-2">
+                    <div class="card-header">Evolução de Faturamento vs Quantidade</div>
+                    <div class="chart-container" id="chart-mensal">
+                        <p class="placeholder-text">Por favor, carregue os dados.</p>
+                    </div>
+                </div>
+
+                <div class="pbi-card">
+                    <div class="card-header">Distribuição por Família</div>
+                    <div class="chart-container" id="chart-familias">
+                        <p class="placeholder-text">Nenhum dado.</p>
+                    </div>
+                </div>
+
+            </section><!-- /charts-section -->
+
+            <!-- --------------------------------------------------- -->
+            <!-- TABELA MATRICIAL CONSOLIDADA                         -->
+            <!-- --------------------------------------------------- -->
+            <div class="pbi-card scroll-card" style="margin-top: 15px;">
+                <div class="card-header">Desempenho Consolidado (Real vs Planejado vs Histórico)</div>
+                <div class="scroll-hint" aria-hidden="true">Deslize a tabela para ver mais colunas</div>
+                <div class="table-scroll">
+                    <table class="pbi-table" id="matrix-table" style="min-width: 800px; margin-top: 10px; font-size: 12px; border-collapse: collapse;">
+                        <thead>
+                            <tr id="matrix-header">
+                                <th style="padding: 6px 10px;">Referência</th>
+                                <th style="text-align: right; padding: 6px 10px;">Jan</th>
+                                <th style="text-align: right; padding: 6px 10px;">Fev</th>
+                                <th style="text-align: right; padding: 6px 10px;">Mar</th>
+                                <th style="text-align: right; padding: 6px 10px;">Abr</th>
+                                <th style="text-align: right; padding: 6px 10px;">Mai</th>
+                                <th style="text-align: right; padding: 6px 10px;">Jun</th>
+                                <th style="text-align: right; padding: 6px 10px;">Jul</th>
+                                <th style="text-align: right; padding: 6px 10px;">Ago</th>
+                                <th style="text-align: right; padding: 6px 10px;">Set</th>
+                                <th style="text-align: right; padding: 6px 10px;">Out</th>
+                                <th style="text-align: right; padding: 6px 10px;">Nov</th>
+                                <th style="text-align: right; padding: 6px 10px;">Dez</th>
+                                <th style="text-align: right; padding: 6px 10px;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matrix-body">
+                            <!-- JS preenche aqui -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- --------------------------------------------------- -->
+            <!-- TABELA MATRICIAL DE FAMÍLIAS                        -->
+            <!-- --------------------------------------------------- -->
+            <div class="pbi-card scroll-card" style="margin-top: 15px;">
+                <div class="card-header">Detalhamento por Famílias (Faturado vs Previsto vs Realizado)</div>
+                <div class="scroll-hint" aria-hidden="true">Deslize a tabela para ver meses e métricas</div>
+                <div class="table-scroll">
+                    <table class="pbi-table" id="family-matrix-table" style="width: 100%; margin-top: 10px; font-size: 10px; border-collapse: collapse; text-align: right; table-layout: auto;">
+                        <thead id="family-matrix-head">
+                            <tr id="family-matrix-header-months">
+                                <th rowspan="2" style="min-width: 250px; text-align: left; padding: 6px;">Famílias</th>
+                            </tr>
+                            <tr id="family-matrix-header-metrics">
+                            </tr>
+                        </thead>
+                        <tbody id="family-matrix-body">
+                            <!-- JS Inject -->
+                        </tbody>
+                        <tfoot id="family-matrix-foot" style="background-color: #FFD966; font-weight: 700; color: #000;">
+                            <!-- JS Inject -->
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- --------------------------------------------------- -->
+            <!-- TOP 15 — Clientes e Serviços                        -->
+            <!-- --------------------------------------------------- -->
+            <div class="top-lists-grid">
+
+                <div class="pbi-card auto-height">
+                    <div class="card-header">Top 15 Clientes</div>
+                    <div class="table-wrapper ranking-wrapper">
+                        <table class="pbi-table ranking-table">
+                            <thead><tr><th>Cliente</th><th class="right">Faturamento</th></tr></thead>
+                            <tbody id="top-clientes"><tr><td colspan="2" class="placeholder-text">Aguardando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="pbi-card auto-height">
+                    <div class="card-header">Top 15 Produtos/Serviços</div>
+                    <div class="table-wrapper ranking-wrapper">
+                        <table class="pbi-table ranking-table">
+                            <thead><tr><th>Produto/Serviço</th><th class="right">Faturamento</th></tr></thead>
+                            <tbody id="top-servicos"><tr><td colspan="2" class="placeholder-text">Aguardando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div><!-- /top-15 grid -->
+
+            <!-- ======================================================= -->
+            <!-- SEÇÃO: Ordens de Venda (OVs)                            -->
+            <!-- ======================================================= -->
+            <section id="ov-section" class="report-section">
+
+                <header class="report-header report-header-compact">
+                    <h1>Ordens de Venda (OVs)</h1>
+                    <p>Distribuição por situação e tipo de operação no período</p>
+                </header>
+
+                <!-- Linha 1: Tabela Situação (esquerda) + Gráfico Situação (direita) -->
+                <div class="ov-grid">
+
+                    <div class="pbi-card scroll-card" style="min-height: 160px;">
+                        <div class="card-header">Situação das OVs por Mês (R$)</div>
+                        <div class="scroll-hint" aria-hidden="true">Deslize para ver meses e totais</div>
+                        <div class="table-scroll">
+                            <table class="pbi-table" style="width:100%; font-size:12px; border-collapse:collapse; margin-top:8px;">
+                                <thead id="ov-table-status-head"></thead>
+                                <tbody id="ov-table-status-body">
+                                    <tr><td colspan="6" class="placeholder-text">Carregue o arquivo de OVs.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="pbi-card" style="min-height: 280px; display:flex; flex-direction:column; justify-content:center;">
+                        <div id="ov-chart-situacao" style="flex:1; min-height:260px;">
+                            <p class="placeholder-text" id="ov-chart-situacao-placeholder">Situação OVs<br><span style="font-size:11px;">Carregue o arquivo</span></p>
+                        </div>
+                    </div>
+
+                </div><!-- /linha 1 OV -->
+
+                <!-- Linha 2: Tabela Tipos (esquerda) + Gráfico Tipos (direita) -->
+                <div class="ov-grid ov-grid-spaced">
+
+                    <div class="pbi-card scroll-card" style="min-height: 160px;">
+                        <div class="card-header">Tipos de OVs por Mês (R$)</div>
+                        <div class="scroll-hint" aria-hidden="true">Deslize para ver meses e totais</div>
+                        <div class="table-scroll">
+                            <table class="pbi-table" style="width:100%; font-size:12px; border-collapse:collapse; margin-top:8px;">
+                                <thead id="ov-table-op-head"></thead>
+                                <tbody id="ov-table-op-body">
+                                    <tr><td colspan="6" class="placeholder-text">Carregue o arquivo de OVs.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="pbi-card" style="min-height: 280px; display:flex; flex-direction:column; justify-content:center;">
+                        <div id="ov-chart-tipos" style="flex:1; min-height:260px;">
+                            <p class="placeholder-text" id="ov-chart-tipos-placeholder">Tipos de OVs<br><span style="font-size:11px;">Carregue o arquivo</span></p>
+                        </div>
+                    </div>
+
+                </div><!-- /linha 2 OV -->
+
+                <!-- Legenda das operações -->
+                <div class="pbi-card" style="margin-top: 15px; font-size: 12px;">
+                    <div class="card-header">Legenda — Tipos de Operação</div>
+                    <table class="pbi-table" style="width:100%; border-collapse:collapse; margin-top:8px;">
+                        <thead>
+                            <tr style="background-color:#0033A0; color:white;">
+                                <th style="padding:6px 10px; text-align:left;">Código</th>
+                                <th style="padding:6px 10px; text-align:left;">Descrição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="background-color:#f5f6fb;">
+                                <td style="padding:5px 10px; font-weight:700; color:#0033A0;">Op. 2001</td>
+                                <td style="padding:5px 10px;">Vendas de Serviços — S/ Retenções — Pessoa Física</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:5px 10px; font-weight:700; color:#E66C37;">Op. 2002</td>
+                                <td style="padding:5px 10px;">Vendas de Serviços — C/ Retenções IR / PIS / COFINS / CSLL</td>
+                            </tr>
+                            <tr style="background-color:#f5f6fb;">
+                                <td style="padding:5px 10px; font-weight:700; color:#00AD68;">Op. 2003</td>
+                                <td style="padding:5px 10px;">Vendas de Serviços — C/ Retenção de IR — Simples Nacional / Emp. Pública</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:5px 10px; font-weight:700; color:#FFC000;">Op. 2004</td>
+                                <td style="padding:5px 10px;">Vendas de Serviços — Exterior</td>
+                            </tr>
+                            <tr style="background-color:#f5f6fb;">
+                                <td style="padding:5px 10px; font-weight:700; color:#7030A0;">Op. 9001</td>
+                                <td style="padding:5px 10px;">Serviço — Ordem de Venda Interna</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </section><!-- /ov-section -->
+
+            </div><!-- /tab-faturamento -->
+
+            <!-- ======= ABA 2: INTELIGÊNCIA DE CLIENTES ======= -->
+            <div id="tab-clientes" class="tab-content" style="display:none;">
+
+                <header class="report-header">
+                    <h1>Inteligência de Clientes</h1>
+                    <p>Análise demográfica, geográfica e de concentração da carteira</p>
+                </header>
+
+                <!-- Bloco 1: KPIs de Clientes -->
+                <section class="kpi-grid kpi-grid-5">
+                    <div class="pbi-card kpi-card">
+                        <span class="kpi-title">Clientes Ativos</span>
+                        <div class="kpi-value" id="cli-kpi-total">-</div>
+                        <div class="kpi-trend">Com faturamento no período</div>
+                    </div>
+                    <div class="pbi-card kpi-card">
+                        <span class="kpi-title">Ticket Médio</span>
+                        <div class="kpi-value" id="cli-kpi-ticket" style="font-size:18px;">-</div>
+                        <div class="kpi-trend">Faturamento / Cliente</div>
+                    </div>
+                    <div class="pbi-card kpi-card">
+                        <span class="kpi-title">Concentração Top 10</span>
+                        <div class="kpi-value" id="cli-kpi-top10" style="color: var(--tecpar-orange);">-</div>
+                        <div class="kpi-trend">% do faturamento total</div>
+                    </div>
+                    <div class="pbi-card kpi-card">
+                        <span class="kpi-title">Estados (UFs)</span>
+                        <div class="kpi-value" id="cli-kpi-ufs">-</div>
+                        <div class="kpi-trend">Cobertura geográfica</div>
+                    </div>
+                    <div class="pbi-card kpi-card">
+                        <span class="kpi-title">Cidades</span>
+                        <div class="kpi-value" id="cli-kpi-cidades">-</div>
+                        <div class="kpi-trend">Municípios atendidos</div>
+                    </div>
+                </section>
+
+                <!-- Bloco 2: Geografia — Mapa do Brasil -->
+                <div class="pbi-card" style="margin-top: 15px;">
+                    <div class="card-header">🗺️ Distribuição Geográfica de Clientes no Brasil</div>
+                    <div id="cli-chart-mapa" style="min-height: 500px; padding: 10px;">
+                        <p class="placeholder-text">Carregue os dados para visualizar o mapa.</p>
+                    </div>
+                </div>
+
+                <!-- Detalhes por UF e Cidades -->
+                <section class="client-chart-grid">
+                    <div class="pbi-card">
+                        <div class="card-header">Faturamento por Estado (UF)</div>
+                        <div id="cli-chart-uf" style="min-height: 320px;">
+                            <p class="placeholder-text">Carregue os dados.</p>
+                        </div>
+                    </div>
+                    <div class="pbi-card">
+                        <div class="card-header">Top 20 Cidades por Faturamento</div>
+                        <div id="cli-chart-cidades" style="min-height: 400px;">
+                            <p class="placeholder-text">Carregue os dados.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Bloco 3: Pareto 80/20 -->
+                <div class="pbi-card" style="margin-top: 15px;">
+                    <div class="card-header">Curva de Concentração de Receita (Pareto 80/20)</div>
+                    <p id="cli-pareto-insight" style="padding: 8px 15px; font-size: 13px; color: var(--text-secondary);"></p>
+                    <div id="cli-chart-pareto" style="min-height: 350px;">
+                        <p class="placeholder-text">Carregue os dados.</p>
+                    </div>
+                </div>
+
+                <!-- Tabela detalhada Top 15 -->
+                <div class="pbi-card scroll-card" style="margin-top: 15px;">
+                    <div class="card-header">Top 15 Clientes — Detalhamento</div>
+                    <div class="scroll-hint client-detail-hint" aria-hidden="true">Deslize para ver cidade, famílias e percentual</div>
+                    <div class="table-scroll client-detail-scroll">
+                        <table class="pbi-table client-detail-table" style="width:100%; font-size:12px; border-collapse:collapse; margin-top:8px;">
+                            <thead>
+                                <tr style="background-color:#0033A0; color:white;">
+                                    <th style="padding:6px 8px; text-align:center; width:40px;">#</th>
+                                    <th style="padding:6px 10px; text-align:left;">Cliente</th>
+                                    <th style="padding:6px 8px; text-align:center;">UF</th>
+                                    <th style="padding:6px 10px; text-align:left;">Cidade</th>
+                                    <th style="padding:6px 10px; text-align:left;">Famílias</th>
+                                    <th style="padding:6px 10px; text-align:right;">Faturamento</th>
+                                    <th style="padding:6px 8px; text-align:center;">% Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cli-detail-body">
+                                <tr><td colspan="7" class="placeholder-text">Aguardando dados...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Bloco 4: Segmentação -->
+                <section class="client-chart-grid">
+                    <div class="pbi-card">
+                        <div class="card-header">Clientes por Família de Produto</div>
+                        <div id="cli-chart-familia" style="min-height: 340px;">
+                            <p class="placeholder-text">Carregue os dados.</p>
+                        </div>
+                    </div>
+                    <div class="pbi-card">
+                        <div class="card-header">Clientes Ativos por Mês</div>
+                        <div id="cli-chart-evolucao" style="min-height: 300px;">
+                            <p class="placeholder-text">Carregue os dados.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Matriz Heatmap Centro × UF -->
+                <div class="pbi-card scroll-card" style="margin-top: 15px;">
+                    <div class="card-header">Matriz: Clientes por Centro de Custo × Estado (Heatmap)</div>
+                    <div class="scroll-hint" aria-hidden="true">Deslize para ver todos os estados</div>
+                    <div class="table-scroll">
+                        <table class="pbi-table" style="width:100%; font-size:12px; border-collapse:collapse; margin-top:8px;">
+                            <thead id="cli-heatmap-head"></thead>
+                            <tbody id="cli-heatmap-body">
+                                <tr><td colspan="2" class="placeholder-text">Aguardando dados...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div><!-- /tab-clientes -->
+
+            <!-- ======= ABA 3: FIDELIDADE ======= -->
+            <div id="tab-fidelidade" class="tab-content" style="display:none;">
+
+                <header class="report-header">
+                    <h1>Análise de Fidelidade</h1>
+                    <p>Retenção e migração de clientes ao longo dos anos com base no Plano de Fidelização</p>
+                </header>
+
+                <div class="context-banner" style="margin-bottom: 12px; font-weight: 500;">
+                    <span class="context-banner-icon">ℹ️</span>
+                    <span><strong>Integração com Filtros Globais:</strong> Esta aba respeita os filtros de Centro, UF e Cliente da barra lateral, mas <em>ignora intencionalmente</em> o filtro de Mês para preservar as coortes anuais e evitar falsos-positivos de Churn.</span>
+                </div>
+
+                <!-- Filtros próprios da aba -->
+                <div class="pbi-card" style="margin-bottom: 12px; padding: 12px 16px;">
+                    <div class="card-header" style="margin-bottom: 8px;">Configuração da Análise</div>
+                    <div id="fid-filtros" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 12px;">
+                        <div class="filter-group">
+                            <label for="fid-ano-base">Ano-base (Coorte)</label>
+                            <select id="fid-ano-base"><option value="">—</option></select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="fid-tipo-retencao">Tipo de Retenção</label>
+                            <select id="fid-tipo-retencao">
+                                <option value="binaria">Binária (qualquer faturamento)</option>
+                                <option value="topn">Persistência no Top-N</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="fid-top-n">Tamanho da Coorte</label>
+                            <select id="fid-top-n">
+                                <option value="GRUPOS">Grupos Institucionais (1A-2C)</option>
+                                <option value="10">Top 10</option>
+                                <option value="25">Top 25</option>
+                                <option value="50">Top 50</option>
+                                <option value="100" selected>Top 100</option>
+                                <option value="200">Top 200</option>
+                                <option value="ALL">Todos</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="fid-setor">Setor</label>
+                            <select id="fid-setor">
+                                <option value="TODOS" selected>Todos</option>
+                                <option value="PUBLICO">Público</option>
+                                <option value="PRIVADO">Privado</option>
+                                <option value="EXTERIOR">Exterior</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="fid-granularidade">Granularidade</label>
+                            <select id="fid-granularidade">
+                                <option value="anual" selected>Anual</option>
+                                <option value="semestral">Semestral</option>
+                                <option value="trimestral">Trimestral</option>
+                                <option value="bimestral">Bimestral</option>
+                                <option value="mensal">Mensal ⚠️</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="fid-modo-2026" title="Comparação para anos parciais (ex: 2026 jan-mai)">Modo Ano Parcial</label>
+                            <select id="fid-modo-2026">
+                                <option value="mesmo_periodo" selected>Mesmo Período do ano anterior</option>
+                                <option value="ano_cheio">Ano Cheio</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="fid-aviso-granularidade" style="display:none; margin-top:8px; font-size:11px; color:#856404; background:#FFF3CD; padding:6px 10px; border-radius:3px; border-left:3px solid #E66C37;">
+                        ⚠️ Granularidades curtas (mensal/bimestral) podem subestimar fidelidade em faturamento projeto-based — clientes podem comprar de forma irregular sem deixar de ser fiéis.
+                    </div>
+                </div>
+
+                <!-- KPIs de Fidelidade -->
+                <section class="kpi-grid">
+                    <div class="pbi-card kpi-card">
+                        <span class="kpi-title">Taxa de Retenção</span>
+                        <div class="kpi-value" id="fid-kpi-taxa">-</div>
+                        <div class="kpi-trend" id="fid-kpi-taxa-sub">Aguardando dados...</div>
+                    </div>
+                    <div class="pbi-card kpi-card">
+                        <span class="kpi-title">Clientes Retidos</span>
+                        <div class="kpi-value" id="fid-kpi-retidos">-</div>
+                        <div class="kpi-trend" id="fid-kpi-retidos-sub">de N na coorte</div>
+                    </div>
+                    <div class="pbi-card kpi-card">
+                        <span class="kpi-title">Valor Retido</span>
+                        <div class="kpi-value" id="fid-kpi-valor-retido">-</div>
+                        <div class="kpi-trend">Faturamento dos retidos no ano comparado</div>
+                    </div>
+                    <div class="pbi-card kpi-card">
+                        <span class="kpi-title">Valor Perdido</span>
+                        <div class="kpi-value" id="fid-kpi-valor-perdido" style="color: var(--tecpar-orange);">-</div>
+                        <div class="kpi-trend">Faturamento da coorte que não retornou</div>
+                    </div>
+                </section>
+
+                <!-- Curva de Coorte -->
+                <div class="pbi-card" style="margin-top: 15px;">
+                    <div class="card-header">Curva de Coorte — Sobrevivência da Carteira ao longo do tempo</div>
+                    <p style="padding: 8px 15px; font-size: 12px; color: var(--text-secondary, #605e5c);" id="fid-coorte-explica">
+                        Mostra qual % dos clientes da coorte (definida pelo ano-base e configuração acima) continua faturando em cada ano subsequente.
+                    </p>
+                    <div id="fid-chart-coorte" style="min-height: 320px;">
+                        <p class="placeholder-text">Carregue as bases para visualizar a curva.</p>
+                    </div>
+                </div>
+
+                <!-- Matriz de Migração 5x5 -->
+                <div class="pbi-card scroll-card" style="margin-top: 15px;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <span>Matriz de Migração Institucional</span>
+                        <div style="font-weight: normal; font-size: 12px; display: flex; gap: 8px; align-items: center;">
+                            <label for="fid-migracao-ano-origem">Ano N:</label>
+                            <select id="fid-migracao-ano-origem" style="padding: 2px 6px; border-radius: 4px; border: 1px solid #ccc;"><option value="">—</option></select>
+                            <label for="fid-migracao-ano-destino">Ano N+1:</label>
+                            <select id="fid-migracao-ano-destino" style="padding: 2px 6px; border-radius: 4px; border: 1px solid #ccc;"><option value="">—</option></select>
+                        </div>
+                    </div>
+                    <p style="padding: 8px 15px; font-size: 12px; color: var(--text-secondary, #605e5c);">
+                        Movimentação de clientes entre grupos. <strong>Linhas</strong>: origem no Ano N. <strong>Colunas</strong>: destino no Ano N+1. <span style="display:inline-block; width:10px; height:10px; background:#00AD68; margin-left:8px;"></span> Subiu / Retido Alto <span style="display:inline-block; width:10px; height:10px; background:#E66C37; margin-left:8px;"></span> Caiu / Saiu <span style="display:inline-block; width:10px; height:10px; background:#FFC000; margin-left:8px;"></span> Retido Baixo
+                    </p>
+                    <div class="scroll-hint" aria-hidden="true">Deslize para ver todos os grupos</div>
+                    <div class="table-scroll">
+                        <table class="pbi-table" id="fid-migracao-table" style="width:100%; font-size:11px; border-collapse:collapse; margin-top:8px;">
+                            <thead id="fid-migracao-head"></thead>
+                            <tbody id="fid-migracao-body">
+                                <tr><td colspan="9" class="placeholder-text">Carregue as bases para visualizar.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Visão por Grupo Institucional -->
+                <div class="pbi-card scroll-card" style="margin-top: 15px;">
+                    <div class="card-header">Visão por Grupo Institucional (Plano de Fidelização)</div>
+                    <p style="padding: 8px 15px; font-size: 12px; color: var(--text-secondary, #605e5c);">
+                        Classificação dinâmica por % do faturamento do ano. <strong>1A:</strong> público ≥6%. <strong>1B:</strong> público &lt;6%. <strong>2A:</strong> privado &gt;1%. <strong>2B:</strong> privado 0,1–0,999%. <strong>2C:</strong> privado &lt;0,1%. <strong>EXT:</strong> exterior.
+                    </p>
+                    <div class="scroll-hint" aria-hidden="true">Deslize para ver todos os anos</div>
+                    <div class="table-scroll">
+                        <table class="pbi-table" id="fid-grupos-table" style="width:100%; font-size:12px; border-collapse:collapse; margin-top:8px;">
+                            <thead id="fid-grupos-head"></thead>
+                            <tbody id="fid-grupos-body">
+                                <tr><td colspan="6" class="placeholder-text">Carregue as bases para visualizar.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Listas Acionáveis -->
+                <div class="top-lists-grid" style="margin-top: 15px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+
+                    <div class="pbi-card auto-height">
+                        <div class="card-header" style="color: #E66C37;">Perdidos (Churn)</div>
+                        <p style="padding: 0 0 10px 0; font-size: 11px; color: var(--text-secondary);">Clientes da coorte que não faturaram no ano comparado.</p>
+                        <div class="table-wrapper ranking-wrapper">
+                            <table class="pbi-table ranking-table">
+                                <thead><tr><th>Cliente</th><th class="right" title="Faturamento no Ano-base">Fat. (Base)</th></tr></thead>
+                                <tbody id="fid-lista-perdidos"><tr><td colspan="2" class="placeholder-text">Aguardando...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="pbi-card auto-height">
+                        <div class="card-header" style="color: #00AD68;">Novos Campeões</div>
+                        <p style="padding: 0 0 10px 0; font-size: 11px; color: var(--text-secondary);">Clientes que entraram no Top-N selecionado no ano comparado.</p>
+                        <div class="table-wrapper ranking-wrapper">
+                            <table class="pbi-table ranking-table">
+                                <thead><tr><th>Cliente</th><th class="right" title="Faturamento no Ano comparado">Fat. (Atual)</th></tr></thead>
+                                <tbody id="fid-lista-campeoes"><tr><td colspan="2" class="placeholder-text">Aguardando...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="pbi-card auto-height">
+                        <div class="card-header" style="color: #0033A0;">Voltadores (Resgatados)</div>
+                        <p style="padding: 0 0 10px 0; font-size: 11px; color: var(--text-secondary);">Faturaram no ano comparado, mas não faturaram no ano-base.</p>
+                        <div class="table-wrapper ranking-wrapper">
+                            <table class="pbi-table ranking-table">
+                                <thead><tr><th>Cliente</th><th class="right" title="Faturamento no Ano comparado">Fat. (Atual)</th></tr></thead>
+                                <tbody id="fid-lista-voltadores"><tr><td colspan="2" class="placeholder-text">Aguardando...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div><!-- /tab-fidelidade -->
+
+            <!-- ======= ABA 4: CONFIGURAÇÕES / REVISÃO SETORIAL ======= -->
+            <div id="tab-config" class="tab-content" style="display:none;">
+                <header class="report-header">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div>
+                            <h1 style="margin: 0;">Revisão Setorial</h1>
+                            <p style="margin: 0; color: var(--text-muted);">Auditoria manual da classificação de clientes (Público/Privado)</p>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-secondary" onclick="exportAIBase()">
+                                🤖 Exportar Base para IA (.json)
+                            </button>
+                            <button class="btn btn-secondary" onclick="exportAIAnalyticalBase()" style="background-color: #0033A0; color: #ffffff;">
+                                IA Analitica (.json)
+                            </button>
+                            <button onclick="baixarClassificacaoCsv()" class="btn-import btn-meta" style="min-height: 38px;">
+                                📥 Baixar Classificação (CSV)
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="pbi-card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column;">
+                    <div style="padding: 16px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #faf9f8;">
+                        <input type="text" id="setor-review-search" placeholder="Buscar por CNPJ ou Razão Social..." 
+                               onkeyup="filterSetorReview()" 
+                               style="width: 300px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+                        <span id="setor-review-count" style="font-size: 13px; color: #666; font-weight: 500;">0 clientes</span>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr style="background: #0033A0; color: white;">
+                                    <th style="padding: 12px; font-size: 12px;">CNPJ Raiz</th>
+                                    <th style="padding: 12px; font-size: 12px;">Cliente</th>
+                                    <th style="padding: 12px; font-size: 12px; text-align: right;">Faturamento Base</th>
+                                    <th style="padding: 12px; font-size: 12px; text-align: center;">Origem</th>
+                                    <th style="padding: 12px; font-size: 12px; text-align: right; width: 220px;">Classificação Setorial</th>
+                                </tr>
+                            </thead>
+                            <tbody id="setor-review-body">
+                                <tr>
+                                    <td colspan="5" class="placeholder-text" style="padding: 20px;">
+                                        Carregue as bases de dados para iniciar a revisão.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div><!-- /tab-config -->
+
+        </main><!-- /main-canvas -->
+
+    </div><!-- /app-container -->
+
+    <!-- ================================================================= -->
+    <!-- MÓDULOS JS                                                         -->
+    <!-- Ordem de dependência: state → processor → filters →               -->
+    <!--   charts → tables → dashboard → ovs → loader                      -->
+    <!-- ================================================================= -->
+    <script src="js/state.js?v=20260506a"></script>
+    <script src="js/setor.js?v=20260508b"></script>
+    <script src="js/data-processor.js?v=20260506b"></script>
+    <script src="js/filters.js?v=20260506a"></script>
+    <script src="js/charts.js?v=20260423"></script>
+    <script src="js/tables.js?v=20260423"></script>
+    <script src="js/dashboard.js?v=20260508b"></script>
+    <script src="js/ovs.js?v=20260505a"></script>
+    <script src="js/brazil-map.js?v=20260423"></script>
+    <script src="js/clients.js?v=20260423b"></script>
+    <script src="js/fidelidade.js?v=20260508d"></script>
+    <script src="js/setor-review.js?v=1.3"></script>
+    <script src="js/ai-knowledge.js?v=1.0"></script>
+    <script src="js/ai-analytical-export.js?v=1.1"></script>
+    <script src="js/loader.js?v=20260506a"></script>
+
+    <!-- Tab switching -->
+    <script>
+    function switchTab(tabId, btn) {
+        document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).style.display = 'block';
+        btn.classList.add('active');
+
+        if (tabId === 'tab-clientes' && typeof renderClientSection === 'function') {
+            renderClientSection();
+        }
+
+        if (tabId === 'tab-fidelidade' && typeof renderFidelitySection === 'function') {
+            renderFidelitySection();
+        }
+
+        if (tabId === 'tab-config' && typeof renderSetorReview === 'function') {
+            renderSetorReview();
+        }
+
+        if (typeof window.collapseMobileFilters === 'function') {
+            window.collapseMobileFilters();
+        }
+    }
+
+    (function setupMobileFiltersToggle() {
+        const btn = document.getElementById('toggle-filters-btn');
+        const pane = document.querySelector('.filter-pane');
+        if (!btn || !pane) return;
+
+        const isMobile = () => window.matchMedia('(max-width: 640px)').matches;
+        const setCollapsed = (collapsed) => {
+            pane.classList.toggle('filters-collapsed', collapsed);
+            btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            btn.textContent = collapsed ? 'Mostrar' : 'Ocultar';
+        };
+
+        const syncInitialState = () => {
+            setCollapsed(isMobile());
+        };
+
+        window.collapseMobileFilters = () => {
+            if (isMobile()) setCollapsed(true);
+        };
+
+        btn.addEventListener('click', () => {
+            setCollapsed(!pane.classList.contains('filters-collapsed'));
+        });
+
+        window.addEventListener('resize', syncInitialState);
+        syncInitialState();
+    })();
+    </script>
+
+</body>
+</html>

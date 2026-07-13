@@ -8,8 +8,6 @@
  * Orquestrador da aba de Clientes.
  * Recebe os dados já filtrados e renderiza todos os 4 blocos.
  */
-// Fonte de dados: getFilteredData(). Por isso esta aba segue os filtros globais
-// de Ano, Centro, Mes, UF e Cliente.
 function renderClientSection() {
     const data = typeof getFilteredData === 'function' ? getFilteredData() : globalData;
 
@@ -26,13 +24,11 @@ function renderClientSection() {
     _renderClientDetailTable(data);
 }
 
-/**
- * Reseta todos os cards, graficos e tabelas quando o filtro atual nao retorna
- * dados. Tambem destroi instancias ApexCharts antigas para evitar sobreposicao.
- */
 function _clearClientSection() {
-    const ids = ['cli-kpi-total', 'cli-kpi-ticket', 'cli-kpi-top10', 'cli-kpi-ufs', 'cli-kpi-cidades'];
+    const ids = ['cli-kpi-total', 'cli-kpi-ticket', 'cli-kpi-top10'];
     ids.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '-'; });
+    const cobEl = document.getElementById('cli-cobertura-geo');
+    if (cobEl) cobEl.textContent = '';
 
     ['cli-chart-uf', 'cli-chart-cidades', 'cli-chart-pareto', 'cli-chart-familia', 'cli-chart-evolucao'].forEach(id => {
         if (charts[id]) { charts[id].destroy(); charts[id] = null; }
@@ -52,12 +48,6 @@ function _clearClientSection() {
     if (mapEl) mapEl.innerHTML = '<p class="placeholder-text">Sem dados para o filtro atual.</p>';
 }
 
-/**
- * Formata valores para eixos de graficos usando abreviacoes legiveis.
- *
- * @param {number} value
- * @returns {string}
- */
 function _formatCompactCurrency(value) {
     const n = Number(value) || 0;
     if (Math.abs(n) >= 1000000) return 'R$ ' + (n / 1000000).toFixed(1).replace('.', ',') + 'M';
@@ -104,8 +94,8 @@ function _renderClientKPIs(data) {
     el('cli-kpi-total', totalClientes.toLocaleString('pt-BR'));
     el('cli-kpi-ticket', formatter.format(ticketMedio));
     el('cli-kpi-top10', top10Pct.toFixed(1) + '%');
-    el('cli-kpi-ufs', ufs.size.toString());
-    el('cli-kpi-cidades', cidades.size.toString());
+    // Cobertura geográfica: antes eram 2 cards KPI; agora um rodapé junto ao mapa.
+    el('cli-cobertura-geo', `Cobertura: ${ufs.size} UFs · ${cidades.size.toLocaleString('pt-BR')} cidades`);
 }
 
 // ---------------------------------------------------------------------------
@@ -316,9 +306,17 @@ function _renderParetoChart(data) {
 function _renderSegmentationCharts(data) {
     // Clientes por Família
     const famClientes = {};
+    const filtroTipo = document.getElementById('cli-filtro-tipo-familia') ? document.getElementById('cli-filtro-tipo-familia').value : 'ALL';
+
     data.forEach(d => {
         if (!d.Familia || d.Familia === 'NÃO IDENTIFICADO') return;
         if (!d.Cliente || d.Cliente === 'NÃO IDENTIFICADO' || d.Cliente === 'ND') return;
+        
+        if (filtroTipo !== 'ALL') {
+            const tipo = window.classificarTipoOperacao ? window.classificarTipoOperacao(d.Centro, d.Familia) : 'Serviço';
+            if (tipo !== filtroTipo) return;
+        }
+
         if (!famClientes[d.Familia]) famClientes[d.Familia] = new Set();
         famClientes[d.Familia].add(d.Cliente);
     });
@@ -337,12 +335,13 @@ function _renderSegmentationCharts(data) {
     }
 
     const elFam = document.getElementById('cli-chart-familia');
-    if (elFam && famSorted.length > 0) {
+    if (elFam) {
         elFam.innerHTML = '';
         if (charts['cli-chart-familia']) { charts['cli-chart-familia'].destroy(); charts['cli-chart-familia'] = null; }
 
-        const famColors = ['#0033A0', '#00AD68', '#E66C37', '#4472C4', '#FFC000', '#7030A0',
-            '#2E75B6', '#548235', '#BF8F00', '#C55A11', '#7B7B7B', '#375623', '#1F4E79', '#843C0C', '#525252'];
+        if (famSorted.length > 0) {
+            const famColors = ['#0033A0', '#00AD68', '#E66C37', '#4472C4', '#FFC000', '#7030A0',
+                '#2E75B6', '#548235', '#BF8F00', '#C55A11', '#7B7B7B', '#375623', '#1F4E79', '#843C0C', '#525252'];
 
         charts['cli-chart-familia'] = new ApexCharts(elFam, {
             series: famSorted.map(f => f.count),
@@ -372,6 +371,9 @@ function _renderSegmentationCharts(data) {
             }]
         });
         charts['cli-chart-familia'].render();
+        } else {
+            elFam.innerHTML = '<p class="placeholder-text">Nenhum cliente encontrado para este filtro.</p>';
+        }
     }
 
     // Evolução mensal de clientes ativos
@@ -421,12 +423,6 @@ function _renderSegmentationCharts(data) {
     _renderHeatmapCentroUF(data);
 }
 
-/**
- * Renderiza a matriz Centro x UF contando clientes unicos por combinacao.
- * A cor de cada celula e proporcional ao maior valor encontrado no filtro.
- *
- * @param {Object[]} data - Registros ja filtrados de globalData.
- */
 function _renderHeatmapCentroUF(data) {
     const thead = document.getElementById('cli-heatmap-head');
     const tbody = document.getElementById('cli-heatmap-body');
@@ -488,12 +484,6 @@ function _renderHeatmapCentroUF(data) {
 // ---------------------------------------------------------------------------
 // Tabela detalhada Top 15
 // ---------------------------------------------------------------------------
-/**
- * Renderiza tabela de Top 15 clientes com localizacao, familias consumidas,
- * faturamento e participacao no total filtrado.
- *
- * @param {Object[]} data - Registros ja filtrados de globalData.
- */
 function _renderClientDetailTable(data) {
     const tbody = document.getElementById('cli-detail-body');
     if (!tbody) return;
@@ -502,10 +492,11 @@ function _renderClientDetailTable(data) {
     data.forEach(d => {
         if (!d.Cliente || d.Cliente === 'NÃO IDENTIFICADO' || d.Cliente === 'ND') return;
         if (!clienteMap[d.Cliente]) {
-            clienteMap[d.Cliente] = { valor: 0, uf: d.UF || 'ND', cidade: d.Cidade || '-', centro: d.Centro || '-', familias: new Set() };
+            clienteMap[d.Cliente] = { valor: 0, uf: d.UF || 'ND', cidade: d.Cidade || '-', centro: d.Centro || '-', familias: new Set(), produtos: new Set() };
         }
         clienteMap[d.Cliente].valor += d.Valor;
         if (d.Familia && d.Familia !== 'NÃO IDENTIFICADO') clienteMap[d.Cliente].familias.add(d.Familia);
+        if (d.Produto && d.Produto !== 'NÃO IDENTIFICADO' && d.Produto !== 'ND') clienteMap[d.Cliente].produtos.add(d.Produto);
     });
 
     const sorted = Object.entries(clienteMap).sort((a, b) => b[1].valor - a[1].valor);
@@ -518,10 +509,13 @@ function _renderClientDetailTable(data) {
         const shortName = nome.length > 45 ? nome.substring(0, 43) + '...' : nome;
         const famList = [...info.familias].join(', ');
         const shortFam = famList.length > 30 ? famList.substring(0, 28) + '...' : famList;
+        const prodList = [...info.produtos].join(' | ').replace(/"/g, '&quot;');
+        const iconHtml = prodList ? `<span style="cursor:help; font-size:15px; color:var(--tecpar-green);" title="${prodList}">ℹ️</span>` : '';
         const bg = idx % 2 === 0 ? '#f5f6fb' : '#fff';
         html += '<tr class="client-detail-row" style="background:' + bg + ';">' +
             '<td class="client-detail-rank" data-label="#" style="padding:5px 8px; text-align:center; font-weight:700; color:var(--tecpar-blue);">' + (idx + 1) + '</td>' +
             '<td class="client-detail-name" data-label="Cliente" style="padding:5px 8px; font-size:11px;" title="' + nome + '">' + shortName + '</td>' +
+            '<td class="client-detail-icon" data-label="Detalhes" style="padding:5px 4px; text-align:center;">' + iconHtml + '</td>' +
             '<td class="client-detail-uf" data-label="UF" style="padding:5px 8px; text-align:center;">' + info.uf + '</td>' +
             '<td class="client-detail-city" data-label="Cidade" style="padding:5px 8px; font-size:11px;">' + info.cidade + '</td>' +
             '<td class="client-detail-family" data-label="Famílias" style="padding:5px 8px; font-size:10px;" title="' + famList + '">' + shortFam + '</td>' +
@@ -534,10 +528,22 @@ function _renderClientDetailTable(data) {
     const top15Fat = top15.reduce((s, c) => s + c[1].valor, 0);
     const top15Pct = totalFat > 0 ? (top15Fat / totalFat * 100).toFixed(1) : '0.0';
     html += '<tr class="client-detail-total" style="background:#E2EFDA; font-weight:700; border-top:2px solid #00AD68;">' +
-        '<td class="client-detail-total-label" colspan="5" style="padding:6px 10px;">Total Top 15 (' + top15.length + ' de ' + sorted.length + ' clientes)</td>' +
+        '<td class="client-detail-total-label" colspan="6" style="padding:6px 10px;">Total Top 15 (' + top15.length + ' de ' + sorted.length + ' clientes)</td>' +
         '<td class="client-detail-total-value" style="padding:6px 8px; text-align:right;">' + formatter.format(top15Fat) + '</td>' +
         '<td class="client-detail-total-share" style="padding:6px 8px; text-align:center;">' + top15Pct + '%</td>' +
         '</tr>';
 
     tbody.innerHTML = html;
+}
+
+// Inicializa o evento do filtro local do gráfico de família
+const cliFiltroTipo = document.getElementById('cli-filtro-tipo-familia');
+if (cliFiltroTipo) {
+    cliFiltroTipo.addEventListener('change', () => {
+        if (typeof getFilteredData === 'function') {
+            _renderSegmentationCharts(getFilteredData());
+        } else if (typeof globalData !== 'undefined') {
+            _renderSegmentationCharts(globalData);
+        }
+    });
 }

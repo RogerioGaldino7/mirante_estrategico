@@ -1,0 +1,3 @@
+// PASTA DE CÓDIGO MORTO — nada aqui é carregado pelo index.html.
+// script.js: versão monolítica antiga (pré-modularização em js/). Movido em 2026-07-13.
+// Mantido apenas como referência histórica; pode ser apagado.

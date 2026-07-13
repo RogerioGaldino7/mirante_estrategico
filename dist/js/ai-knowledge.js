@@ -1,113 +1,200 @@
 /**
  * AI Knowledge Engine - Mirante Estratégico Tecpar
  * Transforma os dados brutos em uma base de conhecimento estruturada para IA.
+ *
+ * Campos do registro (data-processor.js): Ano, Centro, OperacaoFaturamento,
+ * TipoOperacao, Familia, Produto, UF, Cidade, Cliente, CNPJ, CNPJRaiz,
+ * TipoDocumento, Mes, Valor, Quantidade, MesId.
+ *
+ * Privacidade (convenção #6): PJ sai com CNPJ completo; PF (TipoDocumento='CPF')
+ * tem o documento mascarado e o nome anonimizado por um ID estável.
  */
 
 /**
- * Gera um arquivo JSON com resumo geral, clientes agregados por ano e
- * desempenho por familia.
- *
- * Fluxo:
- *   1. Le globalData ja carregado pelo usuario.
- *   2. Agrega faturamento por cliente/ano e por familia/ano.
- *   3. Mascara pessoa fisica antes de incluir no JSON.
- *   4. Dispara download local do arquivo.
- *
- * Observacao de manutencao:
- *   Este exportador e independente da renderizacao do dashboard. Alteracoes
- *   aqui nao devem mudar KPIs ou graficos, mas podem afetar a estrutura do JSON
- *   consumido por processos externos.
+ * Hash estável e seguro para acentos (btoa quebra com Ç/ã). djb2 → base36.
+ * Usado para anonimizar nomes de Pessoa Física mantendo o mesmo ID entre linhas.
  */
+function _hashNomeIA(s) {
+    let h = 5381;
+    const str = String(s);
+    for (let i = 0; i < str.length; i++) {
+        h = ((h << 5) + h) ^ str.charCodeAt(i);
+    }
+    return (h >>> 0).toString(36).toUpperCase().slice(0, 6);
+}
+
 function exportAIBase() {
-    // Tenta encontrar os dados em diferentes locais possíveis
-    const data = window.globalData || globalData || [];
-    
-    if (!data || data.length === 0) {
+    const baseData = window.globalData || (typeof globalData !== 'undefined' ? globalData : []) || [];
+
+    if (!baseData || baseData.length === 0) {
         alert("Não há dados carregados no momento. Por favor, carregue os arquivos CSV primeiro.");
         return;
     }
 
-    console.log("Iniciando mineração de dados para IA...", data.length, "registros encontrados.");
+    // Escopo: respeita apenas os filtros Ano e Centro da sidebar (para um centro
+    // solicitar a própria base). Os demais filtros (UF/Cliente/Mês/Tipo Operação)
+    // são intencionalmente ignorados — a base de conhecimento deve ser completa
+    // dentro do ano/centro escolhido.
+    const elAno   = document.getElementById('filter-ano');
+    const fAno    = elAno ? elAno.value : 'ALL';
+    const fCentro = (typeof window.getCheckedCentros === 'function') ? window.getCheckedCentros() : 'ALL';
+    const centrosSel = (fCentro !== 'ALL' && Array.isArray(fCentro)) ? fCentro : null;
 
+    const data = baseData.filter(d => {
+        if (fAno !== 'ALL' && d.Ano !== fAno) return false;
+        if (centrosSel && !centrosSel.includes(d.Centro)) return false;
+        return true;
+    });
 
-    // 1. Obter Overrides de Setor (Manual vs Auto)
-    const setorOverrides = JSON.parse(localStorage.getItem('setorOverrides') || '{}');
+    if (data.length === 0) {
+        alert("Nenhum registro para o filtro atual (Ano/Centro). Ajuste os filtros e tente novamente.");
+        return;
+    }
 
-    // 2. Estrutura de Conhecimento
+    console.log("Iniciando mineração de dados para IA...", data.length,
+                `de ${baseData.length} registros (após filtro Ano/Centro).`);
+
     const knowledgeBase = {
         projeto: "Mirante Estratégico Tecpar",
         data_extracao: new Date().toLocaleString('pt-BR'),
+        observacao_privacidade: "CNPJ (PJ) completo; CPF (PF) mascarado e nome anonimizado (convenção #6).",
         resumo_geral: {
-            total_registros_brutos: data.length,
-            anos_disponiveis: [...new Set(data.map(d => d.Ano))],
-            centros_custo: [...new Set(data.map(d => d.Centro))]
+            escopo_filtro: {
+                ano: fAno === 'ALL' ? 'Todos os anos' : fAno,
+                centros: centrosSel ? centrosSel : 'Todos os centros',
+                observacao: 'Export respeita apenas os filtros Ano e Centro; UF/Cliente/Mês/Tipo de Operação não são aplicados.'
+            },
+            total_registros: data.length,
+            faturamento_total: 0,
+            anos_disponiveis: [...new Set(data.map(d => d.Ano))].sort(),
+            centros_custo: [...new Set(data.map(d => d.Centro))].sort(),
+            mix_operacao_geral: {},
+            distribuicao_setor: { PUBLICO: 0, PRIVADO: 0, EXTERIOR: 0 },
+            total_clientes: 0
         },
         clientes: {},
         performance_familias: {}
     };
 
-    // 3. Processar Clientes
+    // -----------------------------------------------------------------------
+    // Processamento — uma única passada sobre globalData
+    // -----------------------------------------------------------------------
     data.forEach(row => {
-        let idCliente = row.Cliente || "CLIENTE_NAO_IDENTIFICADO";
-        let documento = (row.CnpjCpf || "").replace(/\D/g, ''); // Apenas números
-        let ePessoaFisica = documento.length === 11; // Regra básica: 11 dígitos = CPF
+        const tipoDoc = row.TipoDocumento || 'ND';
+        const ePF     = tipoDoc === 'CPF';
 
-        // --- CAMADA DE PROTEÇÃO LGPD ---
-        if (ePessoaFisica) {
-            // Gera um ID único e anônimo baseado no nome para a IA ainda rastrear o mesmo cliente
-            const hash = btoa(idCliente).substring(0, 5); 
-            idCliente = `CLIENTE_PF_${hash}`;
-            documento = "***.***.***-**";
+        let idCliente = row.Cliente || "CLIENTE_NAO_IDENTIFICADO";
+        let documento;
+        let nomeExibicao;
+
+        if (ePF) {
+            // Pessoa Física: anonimiza nome + mascara documento (LGPD)
+            idCliente    = `CLIENTE_PF_${_hashNomeIA(row.Cliente || idCliente)}`;
+            nomeExibicao = idCliente;
+            documento    = (typeof mascararDocumento === 'function')
+                ? mascararDocumento(row.CNPJ, tipoDoc)
+                : "***.***.***-**";
+        } else {
+            // PJ / EXT / ND: CNPJ completo (pode ser vazio p/ EXT/ND)
+            nomeExibicao = row.Cliente || idCliente;
+            documento    = row.CNPJ || "";
         }
 
         if (!knowledgeBase.clientes[idCliente]) {
             knowledgeBase.clientes[idCliente] = {
-                nome: idCliente,
-                tipo_entidade: ePessoaFisica ? "Pessoa Física (Dados Mascarados)" : "Pessoa Jurídica",
-                documento_mascarado: documento,
+                nome: nomeExibicao,
+                tipo_entidade: ePF ? "Pessoa Física (anonimizada)" : "Pessoa Jurídica",
+                tipo_documento: tipoDoc,
+                documento: documento,
                 cidade: row.Cidade,
                 uf: row.UF,
-                setor: setorOverrides[idCliente] || row.Setor || "Privado (Auto)",
+                setor: (typeof setorPrincipal === 'function') ? setorPrincipal(row) : 'PRIVADO',
+                setor_detalhado: (typeof classificarSetor === 'function') ? classificarSetor(row) : 'PRIVADO',
                 faturamento_por_ano: {},
-                familias_consumidas: new Set()
+                quantidade_por_ano: {},
+                faturamento_por_ano_mes: {},
+                mix_operacao: {},
+                familias_consumidas: new Set(),
+                produtos_consumidos: new Set()
             };
         }
 
+        const cli    = knowledgeBase.clientes[idCliente];
+        const ano    = row.Ano;
+        const mes    = row.Mes;
+        const valor  = row.Valor || 0;
+        const quant  = row.Quantidade || 0;
+        const tipoOp = row.TipoOperacao || 'Não Classificado';
 
-        const cli = knowledgeBase.clientes[idCliente];
-        const ano = row.Ano;
-        const valor = parseFloat(row.Valor) || 0;
+        cli.faturamento_por_ano[ano] = (cli.faturamento_por_ano[ano] || 0) + valor;
+        cli.quantidade_por_ano[ano]  = (cli.quantidade_por_ano[ano]  || 0) + quant;
 
-        if (!cli.faturamento_por_ano[ano]) cli.faturamento_por_ano[ano] = 0;
-        cli.faturamento_por_ano[ano] += valor;
+        if (!cli.faturamento_por_ano_mes[ano]) cli.faturamento_por_ano_mes[ano] = {};
+        cli.faturamento_por_ano_mes[ano][mes] = (cli.faturamento_por_ano_mes[ano][mes] || 0) + valor;
+
+        cli.mix_operacao[tipoOp] = (cli.mix_operacao[tipoOp] || 0) + valor;
+
         if (row.Familia) cli.familias_consumidas.add(row.Familia);
+        if (row.Produto) cli.produtos_consumidos.add(row.Produto);
 
-        // Processar Performance por Família (Geral)
+        // Performance por Família (geral)
         if (row.Familia) {
-            if (!knowledgeBase.performance_familias[row.Familia]) {
-                knowledgeBase.performance_familias[row.Familia] = { total: 0, por_ano: {} };
+            let fam = knowledgeBase.performance_familias[row.Familia];
+            if (!fam) {
+                fam = knowledgeBase.performance_familias[row.Familia] =
+                    { total: 0, por_ano: {}, quantidade_por_ano: {}, por_tipo_operacao: {} };
             }
-            knowledgeBase.performance_familias[row.Familia].total += valor;
-            if (!knowledgeBase.performance_familias[row.Familia].por_ano[ano]) {
-                knowledgeBase.performance_familias[row.Familia].por_ano[ano] = 0;
-            }
-            knowledgeBase.performance_familias[row.Familia].por_ano[ano] += valor;
+            fam.total += valor;
+            fam.por_ano[ano]            = (fam.por_ano[ano]            || 0) + valor;
+            fam.quantidade_por_ano[ano] = (fam.quantidade_por_ano[ano] || 0) + quant;
+            fam.por_tipo_operacao[tipoOp] = (fam.por_tipo_operacao[tipoOp] || 0) + valor;
         }
+
+        // Agregados globais
+        knowledgeBase.resumo_geral.faturamento_total += valor;
+        knowledgeBase.resumo_geral.mix_operacao_geral[tipoOp] =
+            (knowledgeBase.resumo_geral.mix_operacao_geral[tipoOp] || 0) + valor;
     });
 
-    // 4. Converter Sets para Arrays para o JSON ficar limpo
+    // -----------------------------------------------------------------------
+    // Pós-processamento: Sets → Arrays e estatísticas de resumo
+    // -----------------------------------------------------------------------
     for (let id in knowledgeBase.clientes) {
-        knowledgeBase.clientes[id].familias_consumidas = [...knowledgeBase.clientes[id].familias_consumidas];
+        const c = knowledgeBase.clientes[id];
+        c.familias_consumidas = [...c.familias_consumidas];
+        c.produtos_consumidos = [...c.produtos_consumidos];
+        const s = c.setor;
+        if (knowledgeBase.resumo_geral.distribuicao_setor[s] !== undefined) {
+            knowledgeBase.resumo_geral.distribuicao_setor[s]++;
+        }
+    }
+    knowledgeBase.resumo_geral.total_clientes = Object.keys(knowledgeBase.clientes).length;
+
+    // -----------------------------------------------------------------------
+    // Serialização (arredonda números para 2 casas — evita ruído de float)
+    // -----------------------------------------------------------------------
+    const jsonStr = JSON.stringify(
+        knowledgeBase,
+        (k, v) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v),
+        2
+    );
+    // Sufixo de escopo no nome do arquivo (ajuda quando um centro pede a própria base)
+    let escopoSlug = '';
+    if (fAno !== 'ALL') escopoSlug += '_' + fAno;
+    if (centrosSel && centrosSel.length === 1) {
+        escopoSlug += '_' + centrosSel[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 14);
+    } else if (centrosSel && centrosSel.length > 1) {
+        escopoSlug += `_${centrosSel.length}centros`;
     }
 
-    // 5. Gerar o arquivo e disparar download
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(knowledgeBase, null, 2));
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `Base_Conhecimento_IA_${new Date().toISOString().split('T')[0]}.json`);
-    document.body.appendChild(downloadAnchorNode); 
+    downloadAnchorNode.setAttribute("download", `Base_Conhecimento_IA${escopoSlug}_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
 
-    console.log("Exportação concluída com sucesso.");
+    console.log("Exportação concluída:", knowledgeBase.resumo_geral.total_clientes, "clientes,",
+                Object.keys(knowledgeBase.performance_familias).length, "famílias.");
 }

@@ -2,19 +2,11 @@
 // setor-review.js — Tela de Revisão Setorial
 // =============================================================================
 
-// Depende de: state.js (globalData, formatter)
-//             setor.js (SETOR_OVERRIDES, classificarSetor, setOverrideSetorial)
-//
-// Esta tela e uma camada operacional para corrigir classificacoes sem editar
-// codigo. As alteracoes ficam persistidas no localStorage via setor.js.
-
 /**
  * Renderiza a tabela de revisão de classificação setorial dos clientes.
  * Lista todos os clientes carregados em globalData, permite busca e alteração
  * da categoria (Público/Privado) diretamente via UI.
  */
-// A chave de edicao e o CNPJRaiz, porque a analise de fidelidade considera
-// grupo economico / raiz de orgao como entidade principal.
 function renderSetorReview() {
     const container = document.getElementById('setor-review-body');
     if (!container) return;
@@ -119,8 +111,6 @@ function renderSetorReview() {
 /**
  * Event Listener invocado quando o select de categoria é alterado
  */
-// Handler global chamado pelo atributo onchange dos selects criados em
-// renderSetorReview().
 window.changeSetorOverride = function(selectEl) {
     const cnpj = selectEl.getAttribute('data-cnpj');
     const val = selectEl.value;
@@ -136,8 +126,6 @@ window.changeSetorOverride = function(selectEl) {
  * Filtro em tempo real (com pequeno debounce)
  */
 let _setorFilterTimeout;
-// Busca com debounce para evitar re-renderizar a tabela a cada tecla em bases
-// com muitos clientes.
 window.filterSetorReview = function() {
     clearTimeout(_setorFilterTimeout);
     _setorFilterTimeout = setTimeout(() => {

@@ -11,13 +11,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 
     <!-- Folha de Estilos -->
-    <link rel="stylesheet" href="style.css?v=20260508e">
-    <link rel="shortcut icon" href="Imagem/favicon.png" type="image/x-icon">
-    <link rel="icon" href="Imagem/favicon.png" type="image/png">
+    <link rel="stylesheet" href="style.css?v=20260712d">
+    <link rel="stylesheet" href="report-pn.css?v=1.6">
 
     <!-- Bibliotecas Externas via CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="vendor/papaparse.min.js"></script>
+    <script src="vendor/apexcharts.min.js"></script>
 </head>
 <body>
 
@@ -40,28 +39,38 @@
             <span class="app-title" style="font-family: 'Montserrat', sans-serif; font-weight: 600;">| Planejamento Estratégico</span>
         </div>
         <div class="nav-right">
-            <!-- Botão de Upload Base -->
-            <label for="csvFileInput" class="btn-import">
-                Carregar Base(s) de Dados
+            <label for="folderInput" class="btn-import" style="background-color: #3b82f6; border-color: transparent;" title="Selecione a pasta _Bases_para_Upload inteira para carregar tudo automaticamente">
+                📂 Importar Pasta de Bases
+            </label>
+            <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;" />
+
+            <!-- Os botões individuais continuam disponíveis caso o usuário queira atualizar um por vez -->
+            <label for="csvFileInput" class="btn-import btn-faturamento" style="background-color: var(--tecpar-blue); border-color: transparent; display: none;">
+                Carregar Faturamento
             </label>
             <input type="file" id="csvFileInput" accept=".csv, .txt" multiple style="display: none;" />
-            <!-- Botão de Upload Meta -->
-            <label for="csvMetaInput" class="btn-import btn-meta">
-                Carregar Metas Anuais
+            
+            <label for="csvMetaInput" class="btn-import btn-metas" style="background-color: #00AD68; border-color: transparent; display: none;">
+                Carregar Metas
             </label>
             <input type="file" id="csvMetaInput" accept=".csv, .txt" multiple style="display: none;" />
-            <!-- Botão de Upload OVs -->
-            <label for="csvOVInput" class="btn-import btn-ov" style="background-color: var(--tecpar-orange); border-color: transparent;">
+            
+            <label for="csvOVInput" class="btn-import btn-ov" style="background-color: var(--tecpar-orange); border-color: transparent; display: none;">
                 Carregar OVs
             </label>
             <input type="file" id="csvOVInput" accept=".csv, .txt" style="display: none;" />
-            <!-- Botão de Upload Classificação Setorial -->
-            <label for="csvSetorInput" class="btn-import btn-setor" style="background-color: #6c757d; border-color: transparent;" title="CSV com CNPJRaiz e Setor para corrigir classificação Público/Privado">
+
+            <label for="csvSetorInput" class="btn-import btn-setor" style="background-color: #6c757d; border-color: transparent; display: none;" title="CSV com CNPJRaiz e Setor para corrigir classificação Público/Privado">
                 Classif. Setorial
             </label>
             <input type="file" id="csvSetorInput" accept=".csv, .txt" style="display: none;" />
+
             <button type="button" id="devLoadDataBtn" class="btn-import btn-dev-load dev-only">
                 Carregar Dados de Teste
+            </button>
+            <button type="button" id="devShotsBtn" class="btn-import btn-dev-load dev-only"
+                    title="Regenera os prints do manual em _Sistema/Imagem/manual/ (sobrescreve — o git guarda as versões anteriores)">
+                📸 Prints do Manual
             </button>
             <!-- Botão Manual de Uso -->
             <a href="manual.html" target="_blank" class="btn-import" style="background-color: #ffffff; color: var(--tecpar-blue); border-color: #ffffff; font-weight: 700;">
@@ -80,10 +89,14 @@
             <div class="filter-pane-header">
                 <div class="filter-pane-title-row">
                     <h3>Filtros neste painel</h3>
+                    <button type="button" id="reset-filters-btn" class="filter-toggle-btn filter-reset-btn" title="Restaurar todos os filtros para o padrão (tudo selecionado)" onclick="resetAllFilters()">
+                        Limpar
+                    </button>
                     <button type="button" id="toggle-filters-btn" class="filter-toggle-btn" aria-expanded="true" aria-controls="dashboard-filters">
                         Ocultar
                     </button>
                 </div>
+                <div id="filter-indicator" class="filter-indicator" role="status" aria-live="polite" title="" hidden></div>
                 <p id="file-status">Dados: Aguardando...</p>
                 <p id="meta-status">Metas: Aguardando...</p>
                 <p id="ov-status">OVs: Aguardando...</p>
@@ -108,6 +121,13 @@
                 <div class="filter-group">
                     <label>Meses Selecionados</label>
                     <div id="filter-mes-container" class="checkbox-list">
+                        <span style="font-size: 12px; color: #8a8886;">Importe os dados primeiro</span>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label>Tipo de Operação (Produto/Serviço)</label>
+                    <div id="filter-tipo-operacao-container" class="checkbox-list">
                         <span style="font-size: 12px; color: #8a8886;">Importe os dados primeiro</span>
                     </div>
                 </div>
@@ -138,7 +158,53 @@
         <!-- ======================================================= -->
         <!-- CANVAS PRINCIPAL — Relatório                             -->
         <!-- ======================================================= -->
-        <main class="main-canvas">
+        <main class="main-canvas pre-data">
+
+            <!-- ======================================================= -->
+            <!-- PAINEL DE BOAS-VINDAS (estado vazio, some ao carregar)   -->
+            <!-- Visível só enquanto .main-canvas tem a classe pre-data.  -->
+            <!-- ======================================================= -->
+            <section id="welcome-panel" class="welcome-panel" aria-label="Introdução">
+                <div class="welcome-card">
+                    <h1 class="welcome-title">Bem-vindo ao Mirante Estratégico <span aria-hidden="true">👋</span></h1>
+                    <p class="welcome-subtitle">Para começar, carregue seus dados exportados do cubo Benner.</p>
+
+                    <ol class="welcome-steps">
+                        <li>
+                            <span class="welcome-step-num">1</span>
+                            <div>
+                                <strong>Carregue a base de faturamento</strong>
+                                <span>Clique em <em>Carregar Base(s) de Dados</em> (canto superior direito). Para comparar anos, selecione todos os CSVs de uma vez (Ctrl+clique).</span>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="welcome-step-num">2</span>
+                            <div>
+                                <strong>Adicione Metas e OVs <span class="welcome-optional">(opcional)</span></strong>
+                                <span>Habilita a comparação Real vs Planejado e o painel de Ordens de Venda.</span>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="welcome-step-num">3</span>
+                            <div>
+                                <strong>Explore</strong>
+                                <span>Use os filtros à esquerda e as abas acima (Faturamento, Inteligência de Clientes, Fidelidade).</span>
+                            </div>
+                        </li>
+                    </ol>
+
+                    <div class="welcome-actions">
+                        <button type="button" class="welcome-cta" onclick="document.getElementById('csvFileInput').click()">
+                            📁 Carregar Base(s) de Dados
+                        </button>
+                        <a href="manual.html" target="_blank" class="welcome-manual-link">📖 Ver o manual de uso</a>
+                    </div>
+
+                    <p class="welcome-format-hint">
+                        Formato esperado: CSV do cubo Benner — <em>Centro de custo | Operação de faturamento | Família | Produto | UF | Cidade | Cliente | CNPJ ou CPF | (meses…)</em>
+                    </p>
+                </div>
+            </section>
 
             <!-- Sistema de Abas -->
             <div class="tab-navigation">
@@ -151,10 +217,18 @@
                 <button class="tab-btn" data-tab="tab-fidelidade" onclick="switchTab('tab-fidelidade', this)">
                     🔁 Fidelidade
                 </button>
+                <button class="tab-btn" data-tab="tab-relatorio" onclick="switchTab('tab-relatorio', this)">
+                    🖨️ Relatório
+                </button>
                 <button class="tab-btn" data-tab="tab-config" onclick="switchTab('tab-config', this)">
                     ⚙️ Configurações
                 </button>
             </div>
+
+            <!-- Área de rolagem do conteúdo das abas ("app shell"): só este bloco
+                 rola; a .tab-navigation acima fica sempre visível por layout (flex),
+                 sem position:sticky — o conteúdo nunca passa por trás dela. -->
+            <div class="tab-scroll-area">
 
             <!-- ======= ABA 1: FATURAMENTO ======= -->
             <div id="tab-faturamento" class="tab-content active">
@@ -183,27 +257,27 @@
                 </div>
 
                 <div class="pbi-card kpi-card">
-                    <span class="kpi-title">Volume (Qtd. Executada)</span>
+                    <span class="kpi-title">Volume Executado</span>
                     <div class="kpi-value" id="kpi-quantidade">0</div>
                     <div class="kpi-trend" id="kpi-meta-quantidade" style="font-size: 11px; margin-bottom: 2px;">Planejados: Sem arquivo de metas</div>
                     <div class="kpi-trend" id="kpi-yoy-quantidade" style="font-size: 11px; color: #605E5C;">Ano Ant.: Selecione na caixa Ano</div>
                 </div>
 
                 <div class="pbi-card kpi-card">
-                    <span class="kpi-title">Ticket Médio Geral</span>
+                    <span class="kpi-title">Valor Médio por Execução</span>
                     <div class="kpi-value" id="kpi-ticket">R$ 0,00</div>
-                    <div class="kpi-trend">Por Unidade</div>
+                    <div class="kpi-trend">Faturamento ÷ volume</div>
                 </div>
 
                 <div class="pbi-card kpi-card" style="text-align: center;">
-                    <span class="kpi-title">Família Líder em Faturamento</span>
-                    <div class="kpi-value kpi-small-text" id="kpi-familia" style="margin-top: 5px;">-</div>
-                    <div class="kpi-trend">No escopo do filtro</div>
+                    <span class="kpi-title">Mix Serviço × Produto</span>
+                    <div class="kpi-value kpi-small-text" id="kpi-mix" style="margin-top: 5px;">-</div>
+                    <div class="kpi-trend" id="kpi-mix-sub">% do faturamento</div>
                 </div>
 
                 <!-- Card azul: Faturamento / Meta -->
                 <div class="pbi-card kpi-card" style="background-color: #BDD7EE; border-bottom: 4px solid #4472C4; display: flex; flex-direction: column; justify-content: center;">
-                    <span class="kpi-title" id="kpi-prog-meta-title" style="font-weight: 700; color: #1F4E79; text-align: center; margin-bottom: 12px; font-size: 13px;">Faturamento/Meta</span>
+                    <span class="kpi-title" id="kpi-prog-meta-title" style="font-weight: 700; color: #1F4E79; text-align: center; margin-bottom: 12px; font-size: 13px;">Faturamento vs Meta</span>
                     <div style="width: 100%; text-align: left; background: rgba(255,255,255,0.4); padding: 8px; border-radius: 4px;">
                         <div style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 6px; border-bottom: 1px solid rgba(0,0,0,0.1);">
                             <span>Parcial (%):</span><strong id="kpi-prog-meta-parcial">-</strong>
@@ -216,7 +290,7 @@
 
                 <!-- Card laranja: Faturamento Ano/Anterior -->
                 <div class="pbi-card kpi-card" style="background-color: #F8CBAD; border-bottom: 4px solid #C65911; display: flex; flex-direction: column; justify-content: center;">
-                    <span class="kpi-title" id="kpi-prog-yoy-title" style="font-weight: 700; color: #833C0C; text-align: center; margin-bottom: 12px; font-size: 13px;">Faturamento Ano/Ant.</span>
+                    <span class="kpi-title" id="kpi-prog-yoy-title" style="font-weight: 700; color: #833C0C; text-align: center; margin-bottom: 12px; font-size: 13px;">Crescimento vs Ano Anterior</span>
                     <div style="width: 100%; text-align: left; background: rgba(255,255,255,0.4); padding: 8px; border-radius: 4px;">
                         <div style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 6px; border-bottom: 1px solid rgba(0,0,0,0.1);">
                             <span>Parcial (%):</span><strong id="kpi-prog-yoy-parcial">-</strong>
@@ -235,7 +309,7 @@
             <section class="charts-section">
 
                 <div class="pbi-card span-2">
-                    <div class="card-header">Evolução de Faturamento vs Quantidade</div>
+                    <div class="card-header">Evolução de Faturamento vs Metas</div>
                     <div class="chart-container" id="chart-mensal">
                         <p class="placeholder-text">Por favor, carregue os dados.</p>
                     </div>
@@ -441,14 +515,14 @@
                 </header>
 
                 <!-- Bloco 1: KPIs de Clientes -->
-                <section class="kpi-grid kpi-grid-5">
+                <section class="kpi-grid">
                     <div class="pbi-card kpi-card">
                         <span class="kpi-title">Clientes Ativos</span>
                         <div class="kpi-value" id="cli-kpi-total">-</div>
                         <div class="kpi-trend">Com faturamento no período</div>
                     </div>
                     <div class="pbi-card kpi-card">
-                        <span class="kpi-title">Ticket Médio</span>
+                        <span class="kpi-title">Ticket Médio por Cliente</span>
                         <div class="kpi-value" id="cli-kpi-ticket" style="font-size:18px;">-</div>
                         <div class="kpi-trend">Faturamento / Cliente</div>
                     </div>
@@ -457,21 +531,14 @@
                         <div class="kpi-value" id="cli-kpi-top10" style="color: var(--tecpar-orange);">-</div>
                         <div class="kpi-trend">% do faturamento total</div>
                     </div>
-                    <div class="pbi-card kpi-card">
-                        <span class="kpi-title">Estados (UFs)</span>
-                        <div class="kpi-value" id="cli-kpi-ufs">-</div>
-                        <div class="kpi-trend">Cobertura geográfica</div>
-                    </div>
-                    <div class="pbi-card kpi-card">
-                        <span class="kpi-title">Cidades</span>
-                        <div class="kpi-value" id="cli-kpi-cidades">-</div>
-                        <div class="kpi-trend">Municípios atendidos</div>
-                    </div>
                 </section>
 
                 <!-- Bloco 2: Geografia — Mapa do Brasil -->
                 <div class="pbi-card" style="margin-top: 15px;">
-                    <div class="card-header">🗺️ Distribuição Geográfica de Clientes no Brasil</div>
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                        <span>🗺️ Distribuição Geográfica de Clientes no Brasil</span>
+                        <span id="cli-cobertura-geo" style="font-size:12px; font-weight:600; color:var(--text-secondary);"></span>
+                    </div>
                     <div id="cli-chart-mapa" style="min-height: 500px; padding: 10px;">
                         <p class="placeholder-text">Carregue os dados para visualizar o mapa.</p>
                     </div>
@@ -512,6 +579,7 @@
                                 <tr style="background-color:#0033A0; color:white;">
                                     <th style="padding:6px 8px; text-align:center; width:40px;">#</th>
                                     <th style="padding:6px 10px; text-align:left;">Cliente</th>
+                                    <th style="padding:6px 4px; text-align:center; width:30px;" title="Detalhes dos Produtos/Serviços"></th>
                                     <th style="padding:6px 8px; text-align:center;">UF</th>
                                     <th style="padding:6px 10px; text-align:left;">Cidade</th>
                                     <th style="padding:6px 10px; text-align:left;">Famílias</th>
@@ -520,7 +588,7 @@
                                 </tr>
                             </thead>
                             <tbody id="cli-detail-body">
-                                <tr><td colspan="7" class="placeholder-text">Aguardando dados...</td></tr>
+                                <tr><td colspan="8" class="placeholder-text">Aguardando dados...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -529,7 +597,14 @@
                 <!-- Bloco 4: Segmentação -->
                 <section class="client-chart-grid">
                     <div class="pbi-card">
-                        <div class="card-header">Clientes por Família de Produto</div>
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Clientes por Família</span>
+                            <select id="cli-filtro-tipo-familia" class="form-select" style="width: auto; font-size: 12px; padding: 2px 24px 2px 8px; margin-left: 10px;">
+                                <option value="ALL">Todos</option>
+                                <option value="Serviço">Serviços</option>
+                                <option value="Produto">Produtos</option>
+                            </select>
+                        </div>
                         <div id="cli-chart-familia" style="min-height: 340px;">
                             <p class="placeholder-text">Carregue os dados.</p>
                         </div>
@@ -563,7 +638,7 @@
 
                 <header class="report-header">
                     <h1>Análise de Fidelidade</h1>
-                    <p>Retenção e migração de clientes ao longo dos anos com base no Plano de Fidelização</p>
+                    <p>Retenção e migração de clientes ao longo dos períodos com base no Plano de Fidelização</p>
                 </header>
 
                 <div class="context-banner" style="margin-bottom: 12px; font-weight: 500;">
@@ -576,7 +651,7 @@
                     <div class="card-header" style="margin-bottom: 8px;">Configuração da Análise</div>
                     <div id="fid-filtros" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 12px;">
                         <div class="filter-group">
-                            <label for="fid-ano-base">Ano-base (Coorte)</label>
+                            <label for="fid-ano-base">Período-base (Coorte)</label>
                             <select id="fid-ano-base"><option value="">—</option></select>
                         </div>
                         <div class="filter-group">
@@ -618,10 +693,10 @@
                             </select>
                         </div>
                         <div class="filter-group">
-                            <label for="fid-modo-2026" title="Comparação para anos parciais (ex: 2026 jan-mai)">Modo Ano Parcial</label>
+                            <label for="fid-modo-2026" title="Comparação para períodos parciais (ex: 2026 jan-mai)">Modo Período Parcial</label>
                             <select id="fid-modo-2026">
-                                <option value="mesmo_periodo" selected>Mesmo Período do ano anterior</option>
-                                <option value="ano_cheio">Ano Cheio</option>
+                                <option value="mesmo_periodo" selected>Mesmo intervalo anterior</option>
+                                <option value="ano_cheio">Período Cheio</option>
                             </select>
                         </div>
                     </div>
@@ -645,7 +720,7 @@
                     <div class="pbi-card kpi-card">
                         <span class="kpi-title">Valor Retido</span>
                         <div class="kpi-value" id="fid-kpi-valor-retido">-</div>
-                        <div class="kpi-trend">Faturamento dos retidos no ano comparado</div>
+                        <div class="kpi-trend">Faturamento dos retidos no período comparado</div>
                     </div>
                     <div class="pbi-card kpi-card">
                         <span class="kpi-title">Valor Perdido</span>
@@ -658,7 +733,7 @@
                 <div class="pbi-card" style="margin-top: 15px;">
                     <div class="card-header">Curva de Coorte — Sobrevivência da Carteira ao longo do tempo</div>
                     <p style="padding: 8px 15px; font-size: 12px; color: var(--text-secondary, #605e5c);" id="fid-coorte-explica">
-                        Mostra qual % dos clientes da coorte (definida pelo ano-base e configuração acima) continua faturando em cada ano subsequente.
+                        Mostra qual % dos clientes da coorte (definida pelo período-base e configuração acima) continua faturando em cada período subsequente.
                     </p>
                     <div id="fid-chart-coorte" style="min-height: 320px;">
                         <p class="placeholder-text">Carregue as bases para visualizar a curva.</p>
@@ -670,14 +745,14 @@
                     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                         <span>Matriz de Migração Institucional</span>
                         <div style="font-weight: normal; font-size: 12px; display: flex; gap: 8px; align-items: center;">
-                            <label for="fid-migracao-ano-origem">Ano N:</label>
+                            <label for="fid-migracao-ano-origem">Período N:</label>
                             <select id="fid-migracao-ano-origem" style="padding: 2px 6px; border-radius: 4px; border: 1px solid #ccc;"><option value="">—</option></select>
-                            <label for="fid-migracao-ano-destino">Ano N+1:</label>
+                            <label for="fid-migracao-ano-destino">Período N+1:</label>
                             <select id="fid-migracao-ano-destino" style="padding: 2px 6px; border-radius: 4px; border: 1px solid #ccc;"><option value="">—</option></select>
                         </div>
                     </div>
                     <p style="padding: 8px 15px; font-size: 12px; color: var(--text-secondary, #605e5c);">
-                        Movimentação de clientes entre grupos. <strong>Linhas</strong>: origem no Ano N. <strong>Colunas</strong>: destino no Ano N+1. <span style="display:inline-block; width:10px; height:10px; background:#00AD68; margin-left:8px;"></span> Subiu / Retido Alto <span style="display:inline-block; width:10px; height:10px; background:#E66C37; margin-left:8px;"></span> Caiu / Saiu <span style="display:inline-block; width:10px; height:10px; background:#FFC000; margin-left:8px;"></span> Retido Baixo
+                        Movimentação de clientes entre grupos. <strong>Linhas</strong>: origem no Período N. <strong>Colunas</strong>: destino no Período N+1. <span style="display:inline-block; width:10px; height:10px; background:#00AD68; margin-left:8px;"></span> Subiu / Retido Alto <span style="display:inline-block; width:10px; height:10px; background:#E66C37; margin-left:8px;"></span> Caiu / Saiu <span style="display:inline-block; width:10px; height:10px; background:#FFC000; margin-left:8px;"></span> Retido Baixo
                     </p>
                     <div class="scroll-hint" aria-hidden="true">Deslize para ver todos os grupos</div>
                     <div class="table-scroll">
@@ -690,13 +765,51 @@
                     </div>
                 </div>
 
+                <!-- Detalhamento de Clientes (Drilldown) -->
+                <div id="fid-migracao-drilldown" class="pbi-card drilldown-card" style="display: none; margin-top: 15px;">
+                    <div class="drilldown-header">
+                        <div>
+                            <h3 class="drilldown-title">
+                                🔍 Detalhamento de Clientes: <span id="fid-drilldown-fluxo">Grupo A → Grupo B</span>
+                            </h3>
+                            <div class="drilldown-subtitle" id="fid-drilldown-sub">
+                                Mostrando clientes que migraram entre os grupos selecionados.
+                            </div>
+                        </div>
+                        <div class="drilldown-actions">
+                            <button type="button" class="btn btn-secondary" onclick="exportarDrillDownCsv()" style="font-size: 11px; padding: 6px 12px; height: auto;">
+                                📥 Exportar CSV
+                            </button>
+                            <button type="button" class="btn-close-drilldown" onclick="fecharDrillDown()" aria-label="Fechar Detalhamento">×</button>
+                        </div>
+                    </div>
+                    <div class="drilldown-table-wrapper">
+                        <table class="drilldown-table">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>CNPJ/CPF</th>
+                                    <th class="right">Faturamento (<span id="fid-drilldown-ano-n">Período N</span>)</th>
+                                    <th class="right">Faturamento (<span id="fid-drilldown-ano-n1">Período N+1</span>)</th>
+                                    <th class="right">Variação (Delta)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fid-drilldown-body">
+                                <tr>
+                                    <td colspan="5" class="placeholder-text">Selecione uma célula na matriz para ver os detalhes.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Visão por Grupo Institucional -->
                 <div class="pbi-card scroll-card" style="margin-top: 15px;">
                     <div class="card-header">Visão por Grupo Institucional (Plano de Fidelização)</div>
                     <p style="padding: 8px 15px; font-size: 12px; color: var(--text-secondary, #605e5c);">
-                        Classificação dinâmica por % do faturamento do ano. <strong>1A:</strong> público ≥6%. <strong>1B:</strong> público &lt;6%. <strong>2A:</strong> privado &gt;1%. <strong>2B:</strong> privado 0,1–0,999%. <strong>2C:</strong> privado &lt;0,1%. <strong>EXT:</strong> exterior.
+                        Classificação dinâmica por % do faturamento do período. <strong>1A:</strong> público ≥6%. <strong>1B:</strong> público &lt;6%. <strong>2A:</strong> privado &gt;1%. <strong>2B:</strong> privado 0,1–0,999%. <strong>2C:</strong> privado &lt;0,1%. <strong>EXT:</strong> exterior.
                     </p>
-                    <div class="scroll-hint" aria-hidden="true">Deslize para ver todos os anos</div>
+                    <div class="scroll-hint" aria-hidden="true">Deslize para ver todos os períodos</div>
                     <div class="table-scroll">
                         <table class="pbi-table" id="fid-grupos-table" style="width:100%; font-size:12px; border-collapse:collapse; margin-top:8px;">
                             <thead id="fid-grupos-head"></thead>
@@ -708,36 +821,45 @@
                 </div>
 
                 <!-- Listas Acionáveis -->
-                <div class="top-lists-grid" style="margin-top: 15px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+                <div class="top-lists-grid" style="margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
 
                     <div class="pbi-card auto-height">
-                        <div class="card-header" style="color: #E66C37;">Perdidos (Churn)</div>
-                        <p style="padding: 0 0 10px 0; font-size: 11px; color: var(--text-secondary);">Clientes da coorte que não faturaram no ano comparado.</p>
+                        <div class="card-header" style="color: #E66C37; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Perdidos (Churn)</span>
+                            <button type="button" class="btn btn-secondary" onclick="exportarListaAcionavel('perdidos')" style="font-size: 10px; padding: 3px 8px; height: auto;">📥 CSV</button>
+                        </div>
+                        <p style="padding: 0 0 10px 0; font-size: 11px; color: var(--text-secondary);">Clientes da coorte que não faturaram no período comparado.</p>
                         <div class="table-wrapper ranking-wrapper">
                             <table class="pbi-table ranking-table">
-                                <thead><tr><th>Cliente</th><th class="right" title="Faturamento no Ano-base">Fat. (Base)</th></tr></thead>
+                                <thead><tr><th>Cliente</th><th class="right" title="Faturamento no Período-base">Fat. (Base)</th></tr></thead>
                                 <tbody id="fid-lista-perdidos"><tr><td colspan="2" class="placeholder-text">Aguardando...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
 
                     <div class="pbi-card auto-height">
-                        <div class="card-header" style="color: #00AD68;">Novos Campeões</div>
-                        <p style="padding: 0 0 10px 0; font-size: 11px; color: var(--text-secondary);">Clientes que entraram no Top-N selecionado no ano comparado.</p>
+                        <div class="card-header" style="color: #00AD68; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Novos Campeões</span>
+                            <button type="button" class="btn btn-secondary" onclick="exportarListaAcionavel('campeoes')" style="font-size: 10px; padding: 3px 8px; height: auto;">📥 CSV</button>
+                        </div>
+                        <p style="padding: 0 0 10px 0; font-size: 11px; color: var(--text-secondary);">Clientes que entraram no Top-N selecionado no período comparado.</p>
                         <div class="table-wrapper ranking-wrapper">
                             <table class="pbi-table ranking-table">
-                                <thead><tr><th>Cliente</th><th class="right" title="Faturamento no Ano comparado">Fat. (Atual)</th></tr></thead>
+                                <thead><tr><th>Cliente</th><th class="right" title="Faturamento no Período comparado">Fat. (Atual)</th></tr></thead>
                                 <tbody id="fid-lista-campeoes"><tr><td colspan="2" class="placeholder-text">Aguardando...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
 
                     <div class="pbi-card auto-height">
-                        <div class="card-header" style="color: #0033A0;">Voltadores (Resgatados)</div>
-                        <p style="padding: 0 0 10px 0; font-size: 11px; color: var(--text-secondary);">Faturaram no ano comparado, mas não faturaram no ano-base.</p>
+                        <div class="card-header" style="color: #0033A0; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Voltadores (Resgatados)</span>
+                            <button type="button" class="btn btn-secondary" onclick="exportarListaAcionavel('voltadores')" style="font-size: 10px; padding: 3px 8px; height: auto;">📥 CSV</button>
+                        </div>
+                        <p style="padding: 0 0 10px 0; font-size: 11px; color: var(--text-secondary);">Faturaram no período comparado, mas não faturaram no período-base.</p>
                         <div class="table-wrapper ranking-wrapper">
                             <table class="pbi-table ranking-table">
-                                <thead><tr><th>Cliente</th><th class="right" title="Faturamento no Ano comparado">Fat. (Atual)</th></tr></thead>
+                                <thead><tr><th>Cliente</th><th class="right" title="Faturamento no Período comparado">Fat. (Atual)</th></tr></thead>
                                 <tbody id="fid-lista-voltadores"><tr><td colspan="2" class="placeholder-text">Aguardando...</td></tr></tbody>
                             </table>
                         </div>
@@ -747,20 +869,89 @@
 
             </div><!-- /tab-fidelidade -->
 
-            <!-- ======= ABA 4: CONFIGURAÇÕES / REVISÃO SETORIAL ======= -->
+            <!-- ======= ABA: RELATÓRIO ======= -->
+            <div id="tab-relatorio" class="tab-content" style="display:none;">
+                <h2 style="margin: 0 0 4px;">Construtor de Relatório</h2>
+                <p style="margin: 0 0 16px; font-size: 13px; color: var(--text-secondary);">
+                    Marque os blocos desejados, pré-visualize e baixe em PDF. O relatório reflete os
+                    <strong>filtros ativos</strong> (Ano/Centro) — ajuste-os antes de montar.
+                </p>
+
+                <div class="report-builder">
+                    <aside class="report-panel pbi-card">
+                        <div class="card-header" style="margin-bottom: 10px;">Montar relatório</div>
+
+                        <label style="font-size: 12px; color: var(--text-secondary);">Título</label>
+                        <input type="text" id="report-titulo" value="Relatório Estratégico"
+                               style="width: 100%; margin: 4px 0 14px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+
+                        <div id="report-blocklist"></div>
+
+                        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+                            <button type="button" class="btn btn-secondary" onclick="montarPreviewRelatorio()">🔍 Pré-visualizar</button>
+                            <button type="button" id="report-btn-pdf" class="btn btn-primary" onclick="baixarPDFRelatorio()">📄 Baixar PDF</button>
+                        </div>
+
+                        <div style="border-top: 1px solid #e2e6ef; margin: 16px 0 10px;"></div>
+                        <div class="report-sec-title">Relatório PN (modelo diretoria)</div>
+                        <p style="font-size: 11.5px; color: var(--text-secondary); margin: 4px 0 10px;">
+                            A4 paisagem, no formato do acompanhamento do PN.
+                            Usa os filtros da sidebar: <strong>Ano · Centro · Meses</strong>.
+                        </p>
+                        <div style="display: flex; gap: 14px; margin: 0 0 10px;">
+                            <label class="report-block-item" style="margin: 0;">
+                                <input type="checkbox" id="pn-tipo-servicos" class="pn-tipo-cb" checked>
+                                <span>Serviços</span>
+                            </label>
+                            <label class="report-block-item" style="margin: 0;">
+                                <input type="checkbox" id="pn-tipo-produtos" class="pn-tipo-cb" checked>
+                                <span>Produtos</span>
+                            </label>
+                        </div>
+
+                        <details id="pn-capa-box" style="margin: 0 0 12px;">
+                            <summary style="cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--tecpar-blue, #0033A0);">📝 Capa: destaques e contrato</summary>
+                            <p style="font-size: 11px; color: var(--text-secondary); margin: 6px 0 8px;">
+                                Textos livres da 1ª página (um destaque por linha). Ficam salvos no navegador.
+                            </p>
+                            <div class="pn-capa-campos">
+                                <input type="text" id="pn-capa-t1" class="pn-capa-campo" placeholder="Título da seção 1" value="Desempenho do mês">
+                                <textarea id="pn-capa-x1" class="pn-capa-campo" rows="3" placeholder="Um destaque por linha…"></textarea>
+                                <input type="text" id="pn-capa-t2" class="pn-capa-campo" placeholder="Título da seção 2" value="Acumulado do período">
+                                <textarea id="pn-capa-x2" class="pn-capa-campo" rows="3" placeholder="Um destaque por linha…"></textarea>
+                                <input type="text" id="pn-capa-t3" class="pn-capa-campo" placeholder="Título da seção 3" value="Contrato de Vacinas">
+                                <textarea id="pn-capa-x3" class="pn-capa-campo" rows="3" placeholder="Um destaque por linha…"></textarea>
+                                <div style="font-size: 11.5px; font-weight: 700; color: var(--tecpar-blue, #0033A0); margin-top: 6px;">Contrato de vacinas (velocímetro)</div>
+                                <input type="text" id="pn-contrato-num" class="pn-capa-campo" placeholder="Nº do contrato (ex: 046/2026)">
+                                <input type="text" id="pn-contrato-valor" class="pn-capa-campo" placeholder="Valor total do contrato (R$)">
+                                <input type="text" id="pn-contrato-faturado" class="pn-capa-campo" placeholder="Valor já faturado (R$)">
+                            </div>
+                        </details>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <button type="button" class="btn btn-secondary" onclick="montarPreviewPN()">🔍 Pré-visualizar PN</button>
+                            <button type="button" id="report-pn-btn-pdf" class="btn btn-primary" onclick="baixarPDFPN()">📄 Imprimir / Salvar PDF</button>
+                            <button type="button" id="report-pn-btn-present" class="btn btn-secondary" onclick="apresentarPN()">▶️ Apresentar (tela cheia)</button>
+                        </div>
+                    </aside>
+
+                    <section class="report-preview-wrap">
+                        <div id="report-preview">
+                            <p class="placeholder-text">Selecione os blocos e clique em <strong>Pré-visualizar</strong>.</p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
             <div id="tab-config" class="tab-content" style="display:none;">
                 <header class="report-header">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <div>
-                            <h1 style="margin: 0;">Revisão Setorial</h1>
-                            <p style="margin: 0; color: var(--text-muted);">Auditoria manual da classificação de clientes (Público/Privado)</p>
+                            <h1 style="margin: 0;">Configurações Globais</h1>
+                            <p style="margin: 0; color: var(--text-muted);">Auditoria manual de classificação de setores e famílias</p>
                         </div>
                         <div style="display: flex; gap: 10px;">
                             <button class="btn btn-secondary" onclick="exportAIBase()">
                                 🤖 Exportar Base para IA (.json)
-                            </button>
-                            <button class="btn btn-secondary" onclick="exportAIAnalyticalBase()" style="background-color: #0033A0; color: #ffffff;">
-                                IA Analitica (.json)
                             </button>
                             <button onclick="baixarClassificacaoCsv()" class="btn-import btn-meta" style="min-height: 38px;">
                                 📥 Baixar Classificação (CSV)
@@ -769,12 +960,62 @@
                     </div>
                 </header>
 
+                <!-- Painel: Classificação por Família (Serviços × Produtos) -->
+                <div class="pbi-card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column; margin-bottom: 25px;">
+                    <div style="padding: 16px; border-bottom: 1px solid #eee; background: #faf9f8; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2 style="margin: 0 0 4px; font-size: 16px; color: var(--tecpar-blue, #0033A0);">Classificação de Famílias (Serviços × Produtos)</h2>
+                            <p style="margin: 0; font-size: 12px; color: var(--text-muted);">Defina se cada Família de produto/serviço deve ser tratada como Serviço ou Produto. O padrão automático (AUTO) classifica CVI como Produto e os demais como Serviço.</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="text" id="tipo-review-search" placeholder="Buscar por Família..." 
+                                   onkeyup="filterTipoReview()" 
+                                   style="width: 180px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                            <select id="tipo-review-filter-tipo" onchange="filterTipoReview()"
+                                    style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                <option value="ALL">🔍 Todos os Tipos</option>
+                                <option value="Serviço">🛠️ Serviços</option>
+                                <option value="Produto">📦 Produtos</option>
+                                <option value="OVERRIDE">✏️ Modificados (Manual)</option>
+                            </select>
+                            <span id="tipo-review-count" style="font-size: 12.5px; color: #666; font-weight: 500;">0 famílias</span>
+                        </div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr style="background: #0033A0; color: white;">
+                                    <th style="padding: 12px; font-size: 12px;">Família</th>
+                                    <th style="padding: 12px; font-size: 12px;">Centro de Custo de Referência</th>
+                                    <th style="padding: 12px; font-size: 12px;">Tipo Atual</th>
+                                    <th style="padding: 12px; font-size: 12px; text-align: center;">Origem</th>
+                                    <th style="padding: 12px; font-size: 12px; text-align: right; width: 220px;">Tipo de Operação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tipo-review-body">
+                                <tr>
+                                    <td colspan="5" class="placeholder-text" style="padding: 20px;">
+                                        Carregue as bases de dados para visualizar e configurar as famílias.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Painel: Revisão Setorial (Clientes) -->
                 <div class="pbi-card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column;">
-                    <div style="padding: 16px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #faf9f8;">
-                        <input type="text" id="setor-review-search" placeholder="Buscar por CNPJ ou Razão Social..." 
-                               onkeyup="filterSetorReview()" 
-                               style="width: 300px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
-                        <span id="setor-review-count" style="font-size: 13px; color: #666; font-weight: 500;">0 clientes</span>
+                    <div style="padding: 16px; border-bottom: 1px solid #eee; background: #faf9f8; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2 style="margin: 0 0 4px; font-size: 16px; color: var(--tecpar-blue, #0033A0);">Revisão Setorial (Clientes)</h2>
+                            <p style="margin: 0; font-size: 12px; color: var(--text-muted);">Auditoria manual da classificação de clientes (Público/Privado)</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="text" id="setor-review-search" placeholder="Buscar por CNPJ ou Razão Social..." 
+                                   onkeyup="filterSetorReview()" 
+                                   style="width: 250px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+                            <span id="setor-review-count" style="font-size: 12.5px; color: #666; font-weight: 500;">0 clientes</span>
+                        </div>
                     </div>
                     <div style="overflow-x: auto;">
                         <table style="width: 100%; border-collapse: collapse; text-align: left;">
@@ -799,6 +1040,8 @@
                 </div>
             </div><!-- /tab-config -->
 
+            </div><!-- /tab-scroll-area -->
+
         </main><!-- /main-canvas -->
 
     </div><!-- /app-container -->
@@ -810,19 +1053,28 @@
     <!-- ================================================================= -->
     <script src="js/state.js?v=20260506a"></script>
     <script src="js/setor.js?v=20260508b"></script>
-    <script src="js/data-processor.js?v=20260506b"></script>
-    <script src="js/filters.js?v=20260506a"></script>
-    <script src="js/charts.js?v=20260511a"></script>
-    <script src="js/tables.js?v=20260423"></script>
-    <script src="js/dashboard.js?v=20260508b"></script>
+    <script src="js/tipo-operacao.js?v=1.0"></script>
+    <script src="js/tipo-review.js?v=1.0"></script>
+    <script src="js/data-processor.js?v=20260712e"></script>
+    <script src="js/filters.js?v=20260706d"></script>
+    <script src="js/charts.js?v=20260712d"></script>
+    <script src="js/tables.js?v=20260712d"></script>
+    <script src="js/dashboard.js?v=20260713a"></script>
     <script src="js/ovs.js?v=20260505a"></script>
-    <script src="js/brazil-map.js?v=20260423"></script>
-    <script src="js/clients.js?v=20260423b"></script>
-    <script src="js/fidelidade.js?v=20260508d"></script>
+    <script src="js/brazil-map-paths.js?v=20260712f"></script>
+    <script src="js/brazil-map-render.js?v=20260712g"></script>
+    <script src="js/clients.js?v=20260713f"></script>
+    <script src="js/fidelidade.js?v=20260713e"></script>
     <script src="js/setor-review.js?v=1.3"></script>
-    <script src="js/ai-knowledge.js?v=1.0"></script>
-    <script src="js/ai-analytical-export.js?v=1.1"></script>
-    <script src="js/loader.js?v=20260506a"></script>
+    <script src="js/ai-knowledge.js?v=1.2"></script>
+    <script src="js/loader.js?v=20260713a"></script>
+    <script src="js/dev-shots.js?v=1.1"></script>
+
+    <!-- Relatório: geração de PDF (jsPDF + html2canvas via CDN) -->
+    <script src="vendor/html2canvas.min.js"></script>
+    <script src="vendor/jspdf.umd.min.js"></script>
+    <script src="js/report.js?v=1.2"></script>
+    <script src="js/report-pn.js?v=1.9"></script>
 
     <!-- Tab switching -->
     <script>
@@ -840,8 +1092,13 @@
             renderFidelitySection();
         }
 
-        if (tabId === 'tab-config' && typeof renderSetorReview === 'function') {
-            renderSetorReview();
+        if (tabId === 'tab-config') {
+            if (typeof renderSetorReview === 'function') renderSetorReview();
+            if (typeof renderTipoReview === 'function') renderTipoReview();
+        }
+
+        if (tabId === 'tab-relatorio' && typeof initReportTab === 'function') {
+            initReportTab();
         }
 
         if (typeof window.collapseMobileFilters === 'function') {
@@ -858,7 +1115,10 @@
         const setCollapsed = (collapsed) => {
             pane.classList.toggle('filters-collapsed', collapsed);
             btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-            btn.textContent = collapsed ? 'Mostrar' : 'Ocultar';
+            btn.setAttribute('aria-label', collapsed ? 'Mostrar filtros' : 'Ocultar filtros');
+            // Recolhido: ícone "☰" (cabe na faixa estreita do desktop e é claro
+            // no mobile). Expandido: texto "Ocultar".
+            btn.textContent = collapsed ? '☰' : 'Ocultar';
         };
 
         const syncInitialState = () => {

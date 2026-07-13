@@ -12,11 +12,6 @@ const chartTheme = {
     background: 'transparent'
 };
 
-function removeNativeApexTitles(el) {
-    if (!el) return;
-    el.querySelectorAll('svg title').forEach(title => title.remove());
-}
-
 /**
  * Renderiza o gráfico combinado (barras de faturamento + linha de quantidade)
  * no container #chart-mensal. Se houver metas carregadas, adiciona a linha
@@ -44,30 +39,28 @@ function renderChartMensal(data) {
         });
     }
 
-    const categorias = [], serieVal = [], serieQtd = [], serieMeta = [];
+    const categorias = [], serieVal = [], serieMeta = [];
     mesesOrdem.forEach(m => {
         if (agrupado[m] || (globalMetas.length > 0 && agrupadoMeta[m])) {
             categorias.push(m);
             serieVal.push(agrupado[m] ? Number(agrupado[m].val.toFixed(2)) : 0);
-            serieQtd.push(agrupado[m] ? agrupado[m].qtd : 0);
             if (globalMetas.length > 0) serieMeta.push(agrupadoMeta[m] ? Number(agrupadoMeta[m].toFixed(2)) : 0);
         }
     });
 
     let seriesConfig = [
-        { name: 'Faturamento',      type: 'column', data: serieVal },
-        { name: 'Quantidade Real',  type: 'line',   data: serieQtd }
+        { name: 'Faturamento', type: 'column', data: serieVal }
     ];
-    let chartColors  = ['#0033A0', '#00AD68'];
-    let chartStrokes = [0, 3];
-    let chartDashes  = [0, 0];
+    let chartColors  = ['#0033A0'];
+    let chartStrokes = [0];
+    let chartDashes  = [0];
 
     // Injeta linha tracejada de meta quando disponível
     if (globalMetas.length > 0) {
         seriesConfig.unshift({ name: 'Meta Planejada (R$)', type: 'line', data: serieMeta });
-        chartColors  = ['#FFC000', '#0033A0', '#00AD68'];
-        chartStrokes = [3, 0, 3];
-        chartDashes  = [5, 0, 0];
+        chartColors  = ['#FFC000', '#0033A0'];
+        chartStrokes = [3, 0];
+        chartDashes  = [5, 0];
     }
 
     const options = {
@@ -92,20 +85,6 @@ function renderChartMensal(data) {
                     },
                     style: { colors: '#0033A0' }
                 } 
-            },
-            { title: { text: 'Faturamento' }, show: false }, // Eixo oculto para alinhar séries
-            { 
-                min: 0, 
-                opposite: true, 
-                title: { text: 'Quantidade', style: { color: '#00AD68', fontWeight: 600 } },
-                labels: {
-                    formatter: val => {
-                        if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
-                        if (val >= 1000) return (val / 1000).toFixed(0) + 'k';
-                        return val.toLocaleString('pt-BR');
-                    },
-                    style: { colors: '#00AD68' }
-                }
             }
         ],
         tooltip: {
@@ -133,7 +112,7 @@ function renderChartMensal(data) {
         grid: { borderColor: '#edebe9', strokeDashArray: 4 }
     };
 
-    if (globalMetas.length === 0) options.yaxis.splice(1, 1); // remove eixo dummy
+    // Não é necessário remover eixos dummy pois temos um eixo y único agora.
 
     if (charts['mensal']) charts['mensal'].destroy();
     charts['mensal'] = new ApexCharts(document.querySelector("#chart-mensal"), options);
@@ -170,18 +149,19 @@ function renderChartFamilia(dataArr) {
         processedData = dataArr;
     }
 
+    // Família líder (antes era um card KPI; agora vira destaque no próprio gráfico)
+    const totalFamilias = dataArr.reduce((a, d) => a + d.valor, 0);
+    const liderNome = dataArr[0].chave.length > 30 ? dataArr[0].chave.slice(0, 28) + '…' : dataArr[0].chave;
+    const liderPct  = totalFamilias > 0 ? (dataArr[0].valor / totalFamilias * 100).toFixed(0) : '0';
+
     const options = {
         series: processedData.map(d => d.valor),
         labels: processedData.map(d => d.chave),
-        chart:  {
-            type: 'donut',
-            height: 320,
-            fontFamily: 'Roboto, sans-serif',
-            events: {
-                mounted: chartContext => removeNativeApexTitles(chartContext.el),
-                updated: chartContext => removeNativeApexTitles(chartContext.el),
-                mouseMove: (_event, chartContext) => removeNativeApexTitles(chartContext.el)
-            }
+        chart:  { type: 'donut', height: 380, fontFamily: 'Roboto, sans-serif' },
+        title:  {
+            text: `Família líder: ${liderNome} (${liderPct}%)`,
+            align: 'center',
+            style: { fontSize: '12px', fontWeight: 600, fontFamily: 'Montserrat, sans-serif', color: '#0033A0' }
         },
         colors: ['#0033A0', '#00AD68', '#E66C37', '#FFC000', '#7030A0', '#2E75B6', '#548235', '#BF8F00', '#A5A5A5'],
         stroke:      { show: true, colors: ['#fff'], width: 2 },
@@ -220,15 +200,7 @@ function renderChartFamilia(dataArr) {
                 donut: {
                     size: '65%',
                     labels: {
-                        show: true,
-                        total: {
-                            show: true,
-                            label: 'Total',
-                            formatter: (w) => {
-                                const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                return 'R$ ' + (total / 1000).toFixed(0) + 'k';
-                            }
-                        }
+                        show: false
                     }
                 }
             }
@@ -240,5 +212,5 @@ function renderChartFamilia(dataArr) {
     
     if (charts['familias']) charts['familias'].destroy();
     charts['familias'] = new ApexCharts(el, options);
-    charts['familias'].render().then(() => removeNativeApexTitles(el));
+    charts['familias'].render();
 }

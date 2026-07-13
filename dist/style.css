@@ -16,7 +16,9 @@
     
     --text-primary: #1e293b;
     --text-secondary: #64748b;
-    --text-muted: #94a3b8;
+    --text-muted: #687591; /* corrigido (Onda M0): era #94a3b8, contraste 2.56:1 sobre
+        branco — reprovava WCAG AA (mín. 4.5:1). Novo valor = 4.62:1. Ver
+        Documentacao/Plano_Material_Design_3.md */
     
     --border-light: #e2e8f0;
     --border-glass: rgba(255, 255, 255, 0.4);
@@ -42,18 +44,161 @@
     --font-heading: 'Montserrat', sans-serif;
 }
 
+/* ==========================================================================
+   Design Tokens (arquitetura Material 3 — Onda M0, 2026-07-08)
+   Referência → Sistema. As variáveis antigas acima (--tecpar-blue,
+   --text-primary, --shadow-md, --radius-md...) continuam sendo a fonte da
+   verdade e usadas no resto do arquivo — nada foi removido nem renomeado.
+   Este bloco é fundação para as próximas ondas: M1 aplica estados de
+   interação/acessibilidade; M2 aplica tipografia/elevação/shape nas telas.
+   Ver Documentacao/Plano_Material_Design_3.md (caminho B: M3 como método,
+   Tecpar como marca — sem @material/web, sem dynamic color, sem motion).
+   ========================================================================== */
+:root {
+    /* --- Tokens de referência (paleta bruta, tons numerados) --- */
+    --ref-blue-20: #001F60;   /* fim do gradiente azul */
+    --ref-blue-40: #0033A0;   /* = --tecpar-blue */
+    --ref-blue-90: #DCE4F7;   /* container claro */
+
+    --ref-green-25: #00824E;  /* fim do gradiente verde */
+    --ref-green-40: #00AD68;  /* = --tecpar-green */
+    --ref-green-90: #D7F2E3;
+
+    --ref-orange-30: #B85227; /* fim do gradiente laranja */
+    --ref-orange-46: #E66C37; /* = --tecpar-orange */
+    --ref-orange-90: #FBE1D3;
+
+    --ref-error-40: #C62828;
+    --ref-error-90: #F9DEDC;
+
+    --ref-neutral-10: #1E293B; /* = --text-primary */
+    --ref-neutral-50: #64748B; /* = --text-secondary (contraste 4.76:1) */
+    --ref-neutral-60: #687591; /* = --text-muted corrigido (contraste 4.62:1) */
+    --ref-neutral-70: #94A3B8; /* tom antigo do muted — só p/ uso decorativo/não-textual (ex.: ícones, bordas) */
+    --ref-neutral-90: #E2E8F0; /* = --border-light */
+    --ref-neutral-95: #F4F7F9; /* = --bg-canvas */
+
+    /* --- Tokens de sistema (papéis semânticos, nomenclatura M3) --- */
+    --md-sys-color-primary: var(--tecpar-blue);
+    --md-sys-color-on-primary: #FFFFFF;
+    --md-sys-color-primary-container: var(--ref-blue-90);
+    --md-sys-color-on-primary-container: var(--ref-blue-20);
+
+    --md-sys-color-secondary: var(--tecpar-green);
+    --md-sys-color-on-secondary: #FFFFFF;
+    --md-sys-color-secondary-container: var(--ref-green-90);
+    --md-sys-color-on-secondary-container: var(--ref-green-25);
+
+    --md-sys-color-tertiary: var(--tecpar-orange);
+    --md-sys-color-on-tertiary: #FFFFFF;
+    --md-sys-color-tertiary-container: var(--ref-orange-90);
+    --md-sys-color-on-tertiary-container: var(--ref-orange-30);
+
+    --md-sys-color-error: var(--ref-error-40);
+    --md-sys-color-on-error: #FFFFFF;
+    --md-sys-color-error-container: var(--ref-error-90);
+
+    --md-sys-color-surface: var(--bg-surface);
+    --md-sys-color-surface-variant: var(--bg-canvas);
+    --md-sys-color-on-surface: var(--text-primary);
+    --md-sys-color-on-surface-variant: var(--text-secondary);
+
+    --md-sys-color-outline: var(--ref-neutral-50);
+    --md-sys-color-outline-variant: var(--border-light);
+
+    /* Elevation — mapeia as sombras já existentes; nível 5 é novo (p/ modais) */
+    --md-sys-elevation-0: none;
+    --md-sys-elevation-1: var(--shadow-sm);
+    --md-sys-elevation-2: var(--shadow-md);
+    --md-sys-elevation-3: var(--shadow-lg);
+    --md-sys-elevation-4: var(--shadow-hover);
+    --md-sys-elevation-5: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+
+    /* Shape scale — mapeia os raios já existentes */
+    --md-sys-shape-corner-none: 0px;
+    --md-sys-shape-corner-xs: 4px;
+    --md-sys-shape-corner-sm: var(--radius-sm);
+    --md-sys-shape-corner-md: var(--radius-md);
+    --md-sys-shape-corner-lg: var(--radius-lg);
+    --md-sys-shape-corner-full: 999px;
+
+    /* Type scale — usar via `font: var(--md-sys-typescale-*)` (shorthand) */
+    --md-sys-typescale-display-medium: 800 32px/1.1  var(--font-heading); /* Onda M2: número "hero" dos KPIs — maior que qualquer valor ad-hoc existente */
+    --md-sys-typescale-display-small: 800 28px/1.15 var(--font-heading);
+    --md-sys-typescale-title-large:   700 22px/1.2  var(--font-heading);
+    --md-sys-typescale-title-medium:  700 18px/1.3  var(--font-heading);
+    --md-sys-typescale-title-small:   700 16px/1.3  var(--font-heading);
+    --md-sys-typescale-body-large:    400 15px/1.5  var(--font-sans);
+    --md-sys-typescale-body-medium:   500 14px/1.5  var(--font-sans);
+    --md-sys-typescale-body-small:    500 13px/1.4  var(--font-sans);
+    --md-sys-typescale-label-large:   600 14px/1.2  var(--font-heading);
+    --md-sys-typescale-label-medium:  700 13px/1.2  var(--font-heading);
+    --md-sys-typescale-label-small:   700 12px/1.2  var(--font-heading);
+
+    /* Motion — referência; --transition acima continua sendo o valor em uso */
+    --md-sys-motion-duration-short: 150ms;
+    --md-sys-motion-duration-medium: 300ms;
+    --md-sys-motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* State layers (Onda M1) — opacidade padrão M3 da cor de conteúdo sobre
+       o próprio elemento, aplicada em style.css onde há hover/focus/pressed */
+    --md-sys-state-hover-opacity: 0.08;
+    --md-sys-state-focus-opacity: 0.10;
+    --md-sys-state-pressed-opacity: 0.10;
+    --md-sys-state-disabled-opacity: 0.38;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
     background-color: var(--bg-canvas);
-    background-image: 
+    background-image:
         radial-gradient(at 0% 0%, rgba(0, 51, 160, 0.03) 0px, transparent 50%),
         radial-gradient(at 100% 100%, rgba(0, 173, 104, 0.03) 0px, transparent 50%);
-    background-attachment: fixed;
+    /* Sem background-attachment: fixed — forçava repaint da página inteira a
+       cada scroll (jank perceptível em máquinas modestas). Os gradientes têm
+       3% de opacidade: a diferença visual ao rolar é imperceptível. */
     color: var(--text-primary);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+}
+
+/* ==========================================================================
+   Estados de Interação e Acessibilidade (Onda M1, 2026-07-08)
+   :focus-visible dá anel de foco só na navegação por teclado (mouse/touch
+   não disparam — evita halo indesejado ao clicar). State layers seguem a
+   opacidade M3 (--md-sys-state-*) definida acima. Ver
+   Documentacao/Plano_Material_Design_3.md.
+   ========================================================================== */
+:focus-visible {
+    outline: 3px solid rgba(0, 51, 160, 0.4);
+    outline-offset: 2px;
+    border-radius: var(--md-sys-shape-corner-xs);
+}
+/* select e .filter-toggle-btn já tratam :focus explicitamente — evita anel duplo */
+select:focus-visible,
+.filter-toggle-btn:focus-visible {
+    outline: none;
+}
+
+.tab-btn:active { background: rgba(0, 51, 160, var(--md-sys-state-pressed-opacity)); }
+.checkbox-item:active { color: var(--tecpar-blue); }
+.btn-import:active { transform: translateY(0); background: rgba(255, 255, 255, var(--md-sys-state-pressed-opacity)); }
+
+input[type="checkbox"]:focus-visible {
+    outline: 3px solid rgba(0, 51, 160, 0.4);
+    outline-offset: 2px;
+}
+
+/* disabled consistente (opacidade M3, sem ação de clique) */
+button:disabled,
+.btn-import:disabled,
+select:disabled,
+input:disabled {
+    opacity: var(--md-sys-state-disabled-opacity);
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 /* ==========================================================================
@@ -71,13 +216,13 @@ body {
     top: 0;
     z-index: 1000;
     box-shadow: 0 4px 20px rgba(0, 51, 160, 0.2);
-    backdrop-filter: blur(10px);
+    /* Sem backdrop-filter: o fundo da navbar é um gradiente OPACO, então o
+       blur não tinha efeito visual — só custo de GPU a cada frame de scroll
+       (navbar é sticky). */
 }
 .nav-left { display: flex; align-items: center; gap: 16px; }
-.app-title { 
-    font-size: 22px; 
-    font-weight: 700; 
-    font-family: var(--font-heading);
+.app-title {
+    font: var(--md-sys-typescale-title-large); /* Onda M2 */
     letter-spacing: 0.5px;
     border-left: 2px solid rgba(255,255,255,0.3);
     padding-left: 16px;
@@ -142,12 +287,14 @@ body.dev-mode .dev-only {
     width: 280px;
     flex-shrink: 0;
     background: var(--bg-surface-glass);
-    backdrop-filter: blur(20px);
+    /* Sem backdrop-filter: nada rola por trás da sidebar (layout flex, o
+       conteúdo não passa embaixo) e o fundo do body é quase branco — o
+       blur(20px) era invisível e era o layer mais caro da página. */
     border-right: 1px solid var(--border-light);
     padding: 24px;
     display: flex;
     flex-direction: column;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--md-sys-elevation-1); /* Onda M2 (= --shadow-sm, mesmo valor) */
     z-index: 10;
     overflow-y: auto;
 }
@@ -159,32 +306,141 @@ body.dev-mode .dev-only {
     justify-content: space-between;
     gap: 12px;
 }
-.filter-pane-header h3 { 
-    font-family: var(--font-heading); 
-    font-size: 16px; 
-    font-weight: 700; 
-    color: var(--tecpar-blue); 
+.filter-pane-header h3 {
+    font: var(--md-sys-typescale-title-small); /* Onda M2 */
+    color: var(--tecpar-blue);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 .filter-toggle-btn {
-    display: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: 1px solid var(--border-light);
     background: var(--bg-surface);
     color: var(--tecpar-blue);
     border-radius: var(--radius-sm);
     padding: 7px 10px;
-    font-family: var(--font-heading);
-    font-size: 12px;
-    font-weight: 700;
+    font: var(--md-sys-typescale-label-small); /* Onda M2 */
     cursor: pointer;
 }
 .filter-toggle-btn:focus {
     outline: none;
     box-shadow: 0 0 0 3px rgba(0, 51, 160, 0.12);
 }
-#file-status, #meta-status, #ov-status { 
-    font-size: 12px; 
+/* Botão "Limpar" (reset de filtros): mesmo visual do toggle, mas visível
+   também no desktop — .filter-toggle-btn base é display:none fora do mobile. */
+.filter-reset-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.filter-reset-btn:hover {
+    background: var(--tecpar-blue);
+    color: #ffffff;
+}
+/* Empurra os botões para a direita, colados um no outro (gap 12px) */
+.filter-pane-title-row h3 { margin-right: auto; }
+
+/* Sidebar colapsável no desktop — recolhe para uma faixa estreita e o
+   canvas (.main-canvas é flex:1) ocupa o espaço liberado. No mobile o
+   recolhimento é tratado na media query ≤640px (não afetada por este bloco). */
+@media (min-width: 641px) {
+    .filter-pane { transition: width 0.18s ease, padding 0.18s ease; }
+    .filter-pane.filters-collapsed {
+        width: 46px;
+        padding-left: 8px;
+        padding-right: 8px;
+        overflow: hidden;
+    }
+    .filter-pane.filters-collapsed .filters,
+    .filter-pane.filters-collapsed .user-block,
+    .filter-pane.filters-collapsed #file-status,
+    .filter-pane.filters-collapsed #meta-status,
+    .filter-pane.filters-collapsed #ov-status,
+    .filter-pane.filters-collapsed #setor-status,
+    .filter-pane.filters-collapsed .filter-pane-header h3,
+    .filter-pane.filters-collapsed .filter-reset-btn { display: none; }
+    .filter-pane.filters-collapsed .filter-pane-header { margin-bottom: 0; }
+    .filter-pane.filters-collapsed .filter-pane-title-row { justify-content: center; gap: 0; }
+    /* Recolhido: mantém o selo visível como "● N" (esconde o texto), centralizado
+       sob o botão ☰ — o usuário continua sabendo que há filtros ativos. */
+    .filter-pane.filters-collapsed .filter-indicator {
+        margin-top: 8px;
+        padding: 3px 6px;
+        justify-content: center;
+    }
+    .filter-pane.filters-collapsed .filter-indicator .fi-text { display: none; }
+}
+/* Indicador global de filtro ativo (selo laranja no cabeçalho da sidebar).
+   Oculto quando nada está filtrado; some via [hidden] (o display:inline-flex
+   sobrescreveria o hidden nativo, por isso a regra explícita abaixo). */
+.filter-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 3px 10px;
+    background: rgba(230, 108, 55, 0.12);
+    color: var(--tecpar-orange);
+    border: 1px solid var(--tecpar-orange);
+    border-radius: var(--md-sys-shape-corner-full); /* Onda M2 (= 999px, mesmo valor) */
+    font-family: var(--font-heading);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
+    cursor: help;
+}
+.filter-indicator[hidden] { display: none; }
+.filter-indicator .fi-dot { font-size: 8px; line-height: 1; }
+.filter-indicator .fi-count { font-weight: 800; }
+
+/* ==========================================================================
+   ABA RELATÓRIO (construtor de PDF)
+   ========================================================================== */
+.report-builder { display: flex; gap: 16px; align-items: flex-start; }
+.report-panel { width: 260px; flex-shrink: 0; }
+.report-preview-wrap {
+    flex: 1; min-width: 0; background: #eef0f4; border-radius: 8px;
+    padding: 16px; min-height: 420px; overflow: auto;
+}
+.report-sec-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted, #888); margin: 12px 0 6px; font-weight: 700;
+}
+.report-block-item { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 6px; cursor: pointer; }
+.report-block-item input { width: auto; }
+.report-sheet {
+    background: #fff; max-width: 720px; margin: 0 auto; padding: 28px 32px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.15); border-radius: var(--md-sys-shape-corner-xs); /* Onda M2 (= 4px) */
+}
+.report-sheet-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 2px solid var(--tecpar-blue, #0033A0); padding-bottom: 12px; margin-bottom: 18px;
+}
+.report-brand { font-size: 18px; font-weight: 800; color: var(--tecpar-blue, #0033A0); letter-spacing: .06em; }
+.report-title { font-size: 16px; font-weight: 700; margin-top: 2px; }
+.report-escopo { font-size: 12px; color: var(--text-secondary, #605e5c); margin-top: 4px; }
+.report-date { font-size: 11px; color: var(--text-muted, #888); text-align: right; white-space: nowrap; }
+.report-block { margin-bottom: 18px; page-break-inside: avoid; }
+.report-block-title { font-size: 13px; font-weight: 700; color: var(--tecpar-blue, #0033A0); margin-bottom: 6px; }
+.report-panel .btn {
+    padding: 9px 12px; border-radius: 6px; font-family: var(--font-heading, inherit);
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    border: 1px solid var(--tecpar-blue, #0033A0); background: #fff; color: var(--tecpar-blue, #0033A0);
+    transition: background .15s;
+}
+.report-panel .btn:hover { background: #f0f3fb; }
+.report-panel .btn-primary { background: var(--tecpar-blue, #0033A0); color: #fff; }
+.report-panel .btn-primary:hover { background: #002879; }
+.report-panel .btn:disabled { opacity: var(--md-sys-state-disabled-opacity, .38); cursor: default; } /* Onda M1: alinhado ao padrão M3 (era .6) */
+@media (max-width: 640px) {
+    .report-builder { flex-direction: column; }
+    .report-panel { width: 100%; }
+}
+
+#file-status, #meta-status, #ov-status {
+    font-size: 12px;
     color: var(--text-secondary); 
     margin-top: 6px;
     font-weight: 500;
@@ -241,8 +497,7 @@ select:focus {
     align-items: center;
     gap: 10px;
     margin-bottom: 8px;
-    font-size: 13px;
-    font-weight: 500;
+    font: var(--md-sys-typescale-body-small); /* Onda M2 */
     color: var(--text-primary);
     cursor: pointer;
     transition: var(--transition);
@@ -270,29 +525,47 @@ input[type="checkbox"] {
 /* ==========================================================================
    CANVAS AREA
    ========================================================================== */
+/* Layout "app shell" (2026-07-08): .main-canvas NÃO rola — é uma coluna flex
+   com a .tab-navigation no topo (sempre visível por layout, sem
+   position:sticky) e a .tab-scroll-area embaixo, que é quem rola o conteúdo
+   das abas, recortado abaixo da barra. Assim o conteúdo nunca passa por trás
+   das abas — elimina o artefato visual de "vazamento" que o sticky causava
+   (provável redesenho parcial em RDP/VDI; ver CLAUDE.md 2026-07-08). */
 .main-canvas {
     flex: 1;
     min-width: 0;
-    padding: 32px 40px;
+    padding: 32px 40px 0;
     max-width: 1800px;
     margin: 0 auto;
-    overflow-x: hidden;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-canvas);
 }
 
-.report-header { margin-bottom: 24px; animation: slideDown 0.4s ease-out; }
-.report-header h1 { 
-    font-family: var(--font-heading); 
-    font-size: 28px; 
-    font-weight: 800; 
-    color: var(--tecpar-blue); 
+.tab-scroll-area {
+    flex: 1;
+    min-height: 0;      /* permite o flex encolher abaixo do conteúdo → ativa o scroll */
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: 32px; /* respiro inferior que antes era padding do .main-canvas */
+}
+
+/* Sem `animation` aqui de propósito (mesmo motivo do .tab-content acima):
+   .report-header é conteúdo que rola por baixo de .tab-navigation (sticky).
+   Uma animação de transform/opacity promove o elemento a uma camada de
+   composição própria que pode não respeitar o z-index da barra fixa,
+   causando o título "vazar" por cima dela ao rolar. */
+.report-header { margin-bottom: 24px; }
+.report-header h1 {
+    font: var(--md-sys-typescale-display-small); /* Onda M2 */
+    color: var(--tecpar-blue);
     letter-spacing: -0.5px;
 }
-.report-header p { 
-    font-size: 15px; 
-    color: var(--text-secondary); 
+.report-header p {
+    font: var(--md-sys-typescale-body-large); /* Onda M2 */
+    color: var(--text-secondary);
     margin-top: 4px;
-    font-weight: 400;
 }
 
 /* BANNER DE CONTEXTO */
@@ -306,10 +579,8 @@ input[type="checkbox"] {
     padding: 12px 20px;
     border-radius: var(--radius-sm);
     margin-bottom: 24px;
-    font-size: 14px;
-    font-family: var(--font-heading);
-    font-weight: 600;
-    box-shadow: var(--shadow-sm);
+    font: var(--md-sys-typescale-label-large); /* Onda M2 */
+    box-shadow: var(--md-sys-elevation-1); /* = --shadow-sm, mesmo valor */
     animation: slideDown 0.3s ease-out;
 }
 .context-banner-icon { font-size: 18px; }
@@ -319,7 +590,7 @@ input[type="checkbox"] {
    ========================================================================== */
 .pbi-card {
     background: var(--bg-surface);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--md-sys-elevation-2); /* Onda M2 (= --shadow-md) */
     border-radius: var(--radius-md);
     border: 1px solid rgba(255, 255, 255, 0.8);
     padding: 24px;
@@ -329,13 +600,11 @@ input[type="checkbox"] {
     animation: fadeUp 0.5s ease-out backwards;
 }
 .pbi-card:hover {
-    box-shadow: var(--shadow-hover);
+    box-shadow: var(--md-sys-elevation-4); /* Onda M2 (= --shadow-hover) */
     transform: translateY(-2px);
 }
 .card-header {
-    font-family: var(--font-heading);
-    font-size: 18px;
-    font-weight: 700;
+    font: var(--md-sys-typescale-title-medium); /* Onda M2 */
     color: var(--tecpar-blue);
     margin-bottom: 20px;
     display: flex;
@@ -358,8 +627,8 @@ input[type="checkbox"] {
 }
 .kpi-card { 
     justify-content: center; 
-    padding: 24px; 
-    min-height: 140px;
+    padding: 16px 14px; 
+    min-height: 130px;
     position: relative;
     overflow: hidden;
 }
@@ -374,28 +643,26 @@ input[type="checkbox"] {
 }
 .kpi-card:hover::before { opacity: 1; }
 
-.kpi-title { 
-    font-family: var(--font-heading);
-    font-size: 13px; 
-    font-weight: 700;
+.kpi-title {
+    font: var(--md-sys-typescale-label-medium); /* Onda M2 */
     text-transform: uppercase;
-    color: var(--text-secondary); 
-    margin-bottom: 12px; 
+    color: var(--text-secondary);
+    margin-bottom: 10px;
     letter-spacing: 0.5px;
 }
-.kpi-value { 
-    font-size: 32px; 
-    font-weight: 800; 
-    color: var(--tecpar-blue); 
-    line-height: 1.1; 
-    font-family: var(--font-heading);
+.kpi-value {
+    font: var(--md-sys-typescale-display-medium); /* Onda M2 */
+    font-size: 21px; /* Reduzido drasticamente para garantir que nunca corte os números */
+    color: var(--tecpar-blue);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
 }
 .kpi-small-text { font-size: 20px; line-height: 1.3; word-break: break-word;}
-.kpi-trend { 
-    font-size: 13px; 
-    font-weight: 500;
-    color: var(--text-secondary); 
-    margin-top: 10px; 
+.kpi-trend {
+    font: var(--md-sys-typescale-body-small); /* Onda M2 */
+    color: var(--text-secondary);
+    margin-top: 10px;
 }
 
 /* Specific KPI Cards (Blue & Orange) */
@@ -578,9 +845,9 @@ input[type="checkbox"] {
     background: var(--bg-surface-glass) !important; 
     backdrop-filter: blur(10px) !important;
     border: 1px solid var(--border-glass) !important; 
-    box-shadow: var(--shadow-lg) !important; 
+    box-shadow: var(--md-sys-elevation-3) !important; /* Onda M2 (= --shadow-lg) */
     border-radius: var(--radius-sm) !important;
-    color: var(--text-primary); 
+    color: var(--text-primary);
 }
 .apexcharts-tooltip-title { 
     background: rgba(0,0,0,0.02) !important; 
@@ -622,17 +889,19 @@ input[type="checkbox"] {
     padding: 0 0 0 0;
     margin-bottom: 20px;
     border-bottom: 2px solid var(--border-light);
-    position: sticky;
-    top: 0;
-    z-index: 10;
     background: var(--bg-canvas);
     padding-top: 5px;
+    flex-shrink: 0; /* item fixo da coluna flex do .main-canvas — nunca encolhe */
+    /* Sem `position: sticky` de propósito (fix visual, 2026-07-08): a barra
+       fixa sobre conteúdo rolando causava "vazamento" visual do título em
+       alguns ambientes (RDP/VDI/captura remota — testes descartaram causa em
+       CSS: fundo opaco, z-index alto e até um position:fixed com z-index
+       99999 não cobriam o resíduo). A visibilidade permanente agora vem do
+       layout "app shell": só a .tab-scroll-area (irmã abaixo) rola. */
 }
 
 .tab-btn {
-    font-family: var(--font-heading);
-    font-size: 14px;
-    font-weight: 600;
+    font: var(--md-sys-typescale-label-large); /* Onda M2 */
     padding: 12px 24px;
     border: none;
     border-bottom: 3px solid transparent;
@@ -655,13 +924,136 @@ input[type="checkbox"] {
     background: rgba(0, 51, 160, 0.06);
 }
 
-.tab-content {
-    animation: fadeInTab 0.4s ease-out;
-}
+/* .tab-content ficou sem `animation` de propósito (fix visual, 2026-07-08):
+   é irmã de .tab-navigation (sticky, z-index:10) dentro de .main-canvas. Um
+   `animation` que anima transform/opacity promove o elemento a uma camada de
+   composição própria que, neste layout, não respeita o z-index da barra de
+   abas — o título da aba "vazava" por cima da barra fixa ao rolar. Os cards
+   internos (.pbi-card) já têm sua própria animação de entrada (fadeUp), então
+   o efeito visual de entrada continua existindo sem recriar o bug.
+   fadeInTab segue definido abaixo só para .welcome-panel (tela de onboarding,
+   sem sticky nav visível ali — não sofre do mesmo problema). */
 
 @keyframes fadeInTab {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   PAINEL DE BOAS-VINDAS (onboarding do estado vazio)
+   Enquanto .main-canvas.pre-data: mostra o painel e esconde abas + KPIs
+   zerados. Ao carregar a base, JS remove .pre-data → dashboard aparece.
+   ========================================================================== */
+.welcome-panel { display: none; }
+.main-canvas.pre-data .welcome-panel { display: flex; }
+.main-canvas.pre-data .tab-navigation,
+.main-canvas.pre-data .tab-scroll-area,
+.main-canvas.pre-data .tab-content { display: none !important; }
+/* Sem abas visíveis no estado vazio, o próprio canvas volta a rolar
+   (o painel de boas-vindas pode passar da altura em telas baixas). */
+.main-canvas.pre-data {
+    display: block;
+    overflow-y: auto;
+    padding-bottom: 32px;
+}
+
+.welcome-panel {
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 60vh;
+    animation: fadeInTab 0.4s ease-out;
+}
+.welcome-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--md-sys-elevation-3); /* Onda M2 (= --shadow-lg) */
+    padding: 40px 44px;
+    max-width: 720px;
+    width: 100%;
+    margin-top: 20px;
+}
+.welcome-title {
+    font: var(--md-sys-typescale-display-small); /* Onda M2 (era 26px, escala usa 28px) */
+    color: var(--tecpar-blue);
+    margin-bottom: 8px;
+}
+.welcome-subtitle {
+    font: var(--md-sys-typescale-body-large); /* Onda M2 */
+    color: var(--text-secondary);
+    margin-bottom: 28px;
+}
+.welcome-steps {
+    list-style: none;
+    margin: 0 0 28px 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+.welcome-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+.welcome-step-num {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    color: #fff;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.welcome-steps li div { display: flex; flex-direction: column; gap: 2px; }
+.welcome-steps strong { font-size: 14px; color: var(--text-primary); font-weight: 700; }
+.welcome-steps span { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.welcome-optional { font-weight: 500; color: var(--text-muted); font-size: 12px; }
+.welcome-actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.welcome-cta {
+    background: var(--gradient-success);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 12px 24px;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: var(--md-sys-elevation-2); /* Onda M2 (= --shadow-md) */
+    transition: var(--transition);
+}
+.welcome-cta:hover { transform: translateY(-2px); box-shadow: var(--md-sys-elevation-4); } /* Onda M2 (= --shadow-hover) */
+.welcome-manual-link {
+    color: var(--tecpar-blue);
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+}
+.welcome-manual-link:hover { text-decoration: underline; }
+.welcome-format-hint {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-light);
+    padding-top: 16px;
+    line-height: 1.5;
+}
+.welcome-format-hint em { color: var(--text-secondary); font-style: normal; }
+
+@media (max-width: 640px) {
+    .welcome-card { padding: 28px 20px; }
+    .welcome-title { font-size: 21px; }
 }
 
 /* Grid de 5 KPIs para aba de Clientes */
@@ -824,11 +1216,17 @@ input[type="checkbox"] {
         padding: 18px 16px 28px;
         overflow-x: hidden;
         overflow-y: visible;
+        /* Mobile: .app-container é display:block e a página inteira rola —
+           desfaz o "app shell" do desktop (coluna flex + área de scroll). */
+        display: block;
+    }
+
+    .tab-scroll-area {
+        overflow: visible;
+        padding-bottom: 0; /* o padding inferior do .main-canvas já cobre */
     }
 
     .tab-navigation {
-        position: static;
-        top: 0;
         overflow-x: auto;
         padding-top: 0;
         margin: 0 -16px 18px;
@@ -975,7 +1373,7 @@ input[type="checkbox"] {
         margin: -6px 0 8px;
         padding: 5px 9px;
         border: 1px solid var(--border-light);
-        border-radius: 999px;
+        border-radius: var(--md-sys-shape-corner-full); /* Onda M2 (= 999px) */
         color: var(--text-secondary);
         background: var(--bg-canvas);
         font-size: 11px;
@@ -1021,7 +1419,7 @@ input[type="checkbox"] {
         border: 1px solid var(--border-light);
         border-radius: var(--radius-sm);
         background: var(--bg-surface);
-        box-shadow: var(--shadow-sm);
+        box-shadow: var(--md-sys-elevation-1); /* Onda M2 (= --shadow-sm) */
     }
 
     .ranking-table .ranking-row td {
@@ -1046,7 +1444,7 @@ input[type="checkbox"] {
         min-width: 28px;
         margin-right: 7px;
         padding: 2px 5px;
-        border-radius: 999px;
+        border-radius: var(--md-sys-shape-corner-full); /* Onda M2 (= 999px) */
         background: rgba(0, 51, 160, 0.08);
         color: var(--tecpar-blue);
         font-size: 10px;
@@ -1165,7 +1563,7 @@ input[type="checkbox"] {
         border: 1px solid var(--border-light);
         border-radius: var(--radius-sm);
         background: var(--bg-surface) !important;
-        box-shadow: var(--shadow-sm);
+        box-shadow: var(--md-sys-elevation-1); /* Onda M2 (= --shadow-sm) */
     }
 
     #cli-detail-body .client-detail-row td {
@@ -1180,7 +1578,7 @@ input[type="checkbox"] {
         align-self: start;
         min-width: 34px;
         padding: 5px 7px !important;
-        border-radius: 999px;
+        border-radius: var(--md-sys-shape-corner-full); /* Onda M2 (= 999px) */
         background: rgba(0, 51, 160, 0.08) !important;
         color: var(--tecpar-blue) !important;
         font-family: var(--font-heading);
@@ -1382,6 +1780,11 @@ input[type="checkbox"] {
         padding: 34px 0;
         font-size: 13px;
     }
+
+    /* Alvos de toque ≥48px no mobile (Onda M1 — M3: área mínima de toque confortável) */
+    input[type="checkbox"] { width: 20px; height: 20px; }
+    .checkbox-item { min-height: 44px; padding: 4px 0; }
+    .tab-btn { min-height: 44px; }
 }
 
 @media (max-width: 420px) {
@@ -1503,3 +1906,231 @@ input[type="checkbox"] {
     0%   { left: -35%; }
     100% { left: 100%; }
 }
+
+/* ==========================================================================
+   MATRIZ DE MIGRAÇÃO INTERATIVA & HEATMAP
+   ========================================================================== */
+.migracao-table {
+    width: 100%;
+    font-size: 11px;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+.migracao-table th {
+    background-color: var(--tecpar-blue);
+    color: white;
+    padding: 8px 10px;
+    font-family: var(--font-heading);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.migracao-table td {
+    padding: 8px 10px;
+    text-align: center;
+    border: 1px solid var(--border-light);
+}
+
+.migracao-celula-interativa {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    position: relative;
+}
+
+.migracao-celula-interativa:hover {
+    transform: scale(1.04);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+    z-index: 5;
+    filter: brightness(0.95);
+}
+
+.migracao-celula-interativa.cell-active {
+    box-shadow: inset 0 0 0 2px var(--tecpar-blue), 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: scale(1.04);
+    z-index: 6;
+}
+
+/* Cores do Heatmap */
+.migracao-celula-igual {
+    background-color: #E2EFDA !important; /* Verde claro para estabilidade */
+    color: #385623 !important;
+}
+
+.migracao-celula-subiu {
+    background-color: #DDEBF7 !important; /* Azul claro para evolução */
+    color: #1F4E79 !important;
+}
+
+.migracao-celula-caiu {
+    background-color: #FFF2CC !important; /* Amarelo para queda leve */
+    color: #7F6000 !important;
+}
+
+.migracao-celula-saiu {
+    background-color: #FCE4D6 !important; /* Laranja/vermelho claro para perda/churn */
+    color: #C65911 !important;
+}
+
+.migracao-celula-entrou {
+    background-color: #E2F0D9 !important; /* Verde-azulado/ciano para entrada */
+    color: #385623 !important;
+}
+
+/* Drilldown Section */
+.drilldown-card {
+    border-top: 4px solid var(--tecpar-blue) !important;
+    animation: slideDown 0.3s ease-out;
+}
+
+.drilldown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}
+
+.drilldown-title {
+    font: var(--md-sys-typescale-title-small); /* Onda M2 (era 15px, escala usa 16px) */
+    color: var(--tecpar-blue);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.drilldown-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.drilldown-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.btn-close-drilldown {
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--md-sys-shape-corner-full); /* Onda M2 (= 50% num quadrado, mesmo resultado) */
+}
+
+.btn-close-drilldown:hover {
+    background: rgba(0,0,0,0.05);
+    color: var(--text-primary);
+}
+
+.drilldown-table-wrapper {
+    max-height: 350px;
+    overflow-y: auto;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+}
+
+.drilldown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.drilldown-table th {
+    background: #faf9f8;
+    color: var(--text-primary);
+    font-family: var(--font-heading);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 10px 12px;
+    border-bottom: 2px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    text-align: left;
+}
+
+.drilldown-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.drilldown-table tbody tr:hover {
+    background: rgba(0, 51, 160, 0.02);
+}
+
+.drilldown-table .right {
+    text-align: right;
+}
+
+.delta-positivo {
+    color: var(--tecpar-green);
+    font-weight: 600;
+}
+
+.delta-negativo {
+    color: var(--tecpar-orange);
+    font-weight: 600;
+}
+
+.delta-estavel {
+    color: var(--text-secondary);
+}
+
+/* Glassmorphism Tooltip para Mapa */
+#map-tooltip { 
+    position: fixed; 
+    pointer-events: none; 
+    background: rgba(15, 23, 42, 0.85); 
+    backdrop-filter: blur(8px); 
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15); 
+    color: #fff; 
+    padding: 12px 16px; 
+    border-radius: 8px; 
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3); 
+    font-family: 'Inter', 'Roboto', sans-serif; 
+    z-index: 9999; 
+    display: none; 
+    transform: translate(-50%, -120%); 
+    transition: opacity 0.2s ease, transform 0.1s ease-out; 
+    opacity: 0; 
+    min-width: 180px; 
+}
+#map-tooltip.visible {
+    opacity: 1;
+}
+#map-tooltip h4 { 
+    margin: 0 0 10px 0; 
+    font-size: 14px; 
+    font-weight: 700; 
+    border-bottom: 1px solid rgba(255,255,255,0.2); 
+    padding-bottom: 6px; 
+    color: #38bdf8; 
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+#map-tooltip p { 
+    margin: 6px 0; 
+    font-size: 12px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+}
+#map-tooltip p span.lbl {
+    color: #cbd5e1;
+}
+#map-tooltip p span.val { 
+    font-weight: 600;
+    font-size: 13px; 
+}
+

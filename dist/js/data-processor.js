@@ -5,14 +5,25 @@
 // Chama após processar: populateFilters() [filters.js], updateDashboard() [dashboard.js]
 // =============================================================================
 
+// A função classificarTipoOperacao(centro, familia) agora está definida globalmente
+// no arquivo js/tipo-operacao.js para permitir overrides dinâmicos via UI.
+
+const VALID_OPERATIONS = [
+    '2001', // Vendas de Serviços - S/ Retenções - PESSOA FÍSICA
+    '2002', // Vendas de Serviços - C/ Retenções de IR / PIS / COFINS / CSLL
+    '2003', // Vendas de Serviços - C/ Retenção de IR - SIMPLES NACIONAL - EMP. PUBLICA
+    '2004', // Vendas de Serviços - Exterior
+    '3003'  // Venda à Ordem
+];
+
 /**
- * Conta quantas das primeiras 6 colunas de uma linha estão vazias.
+ * Conta quantas das primeiras 7 colunas de uma linha estão vazias.
  * Usado para determinar o nível hierárquico do registro
- * (Centro > Família > Produto > UF > Cidade > Cliente).
+ * (Centro > Operação de faturamento > Família > Produto > UF > Cidade > Cliente).
  */
 function countEmptyLeading(row) {
     let count = 0;
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
         if (!row[i] || String(row[i]).trim() === "") count++;
         else break;
     }
@@ -24,10 +35,10 @@ function countEmptyLeading(row) {
  * registros tidy com um campo por dimensão + Mes + Valor + Quantidade.
  * Popula globalData e dispara populateFilters() + updateDashboard().
  *
- * Estrutura esperada do CSV (formato com CNPJ/CPF):
- *   Col 0..5 : Centro | Família | Produto | UF | Cidade | Cliente
- *   Col 6    : CNPJ ou CPF
- *   Col 7..N : pares Valor / Quantidade dos meses (Jan, Fev, ...)
+ * Estrutura esperada do CSV (formato com Operação de faturamento + CNPJ/CPF):
+ *   Col 0..6 : Centro | Operação de faturamento | Família | Produto | UF | Cidade | Cliente
+ *   Col 7    : CNPJ ou CPF
+ *   Col 8..N : pares Valor / Quantidade dos meses (Jan, Fev, ...)
  *   Col N+1  : Total Valor / Total Quantidade
  *   Col última: Ano (injetado pelo loader.js a partir do nome do arquivo)
  *
@@ -45,12 +56,12 @@ async function processData(rows) {
     }
     if (typeof yieldUI === 'function') await yieldUI();
 
-    // Posições fixas no novo formato (com coluna CNPJ/CPF):
-    const CNPJ_COL        = 6;
-    const MONTH_START_COL = 7;
+    // Posições fixas no novo formato (com coluna Operação de faturamento + CNPJ/CPF):
+    const CNPJ_COL        = 7;
+    const MONTH_START_COL = 8;
 
     let tidyData = [];
-    let state = Array(6).fill("");
+    let state = Array(7).fill("");
     const mesesBase = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
     let formatoValidado = false;
@@ -77,15 +88,17 @@ async function processData(rows) {
         const r0 = String(row[0]).trim().toUpperCase();
 
         // Cabeçalho de colunas: validamos que a base está no formato esperado
-        // (deve conter "CNPJ" ou "CPF" na coluna 6)
+        // (deve conter "CNPJ" ou "CPF" na coluna 7, após a coluna
+        // "Operação de faturamento" inserida na 2ª posição)
         if (r0 === "CENTRO DE CUSTO") {
-            const col6Header = String(row[CNPJ_COL] || '').toUpperCase();
-            if (!col6Header.includes('CNPJ') && !col6Header.includes('CPF')) {
+            const colCnpjHeader = String(row[CNPJ_COL] || '').toUpperCase();
+            if (!colCnpjHeader.includes('CNPJ') && !colCnpjHeader.includes('CPF')) {
                 if (typeof hideLoading === 'function') hideLoading();
                 alert(
-                    "Base em formato antigo detectada (sem coluna CNPJ/CPF).\n\n" +
-                    "Por favor, re-exporte do ERP incluindo a coluna CNPJ/CPF como 7ª coluna " +
-                    "(após Cliente).\n\n" +
+                    "Base em formato antigo detectada (sem coluna 'Operação de faturamento' " +
+                    "e/ou CNPJ/CPF).\n\n" +
+                    "Por favor, re-exporte do ERP no formato atual: Centro de custo | Operação " +
+                    "de faturamento | Família | Produto | UF | Cidade | Cliente | CNPJ ou CPF.\n\n" +
                     `Esperado em col ${CNPJ_COL + 1}: "CNPJ ou CPF"\n` +
                     `Encontrado: "${row[CNPJ_COL] || '(vazio)'}"`
                 );
@@ -95,7 +108,7 @@ async function processData(rows) {
             // Reseta o estado hierárquico ao começar uma nova base — evita que
             // valores de Centro/Família/etc da base anterior vazem para a próxima
             // quando múltiplos arquivos são concatenados pelo loader.
-            for (let s = 0; s < 6; s++) state[s] = "";
+            for (let s = 0; s < 7; s++) state[s] = "";
             continue;
         }
 
@@ -111,10 +124,10 @@ async function processData(rows) {
 
         // Atualiza o estado hierárquico: qualquer célula preenchida redefine aquele nível
         // e zera os níveis filhos (carry-forward)
-        for (let j = 0; j < 6; j++) {
+        for (let j = 0; j < 7; j++) {
             if (row[j] && String(row[j]).trim() !== "") {
                 state[j] = String(row[j]).trim();
-                for (let k = j + 1; k < 6; k++) state[k] = "";
+                for (let k = j + 1; k < 7; k++) state[k] = "";
             }
         }
 
@@ -160,6 +173,29 @@ async function processData(rows) {
 
         // Só emite registros para linhas folha (sem filhos abaixo)
         if (d_current >= d_next) {
+            
+            // -----------------------------------------------------------------
+            // NORMALIZAÇÃO DE HIERARQUIA (ERP muda a ordem entre anos)
+            // 2025 exportado como: Centro > Familia > Operacao
+            // 2026 exportado como: Centro > Operacao > Familia
+            // -----------------------------------------------------------------
+            let realOp = String(state[1] || '').trim();
+            let realFam = String(state[2] || '').trim();
+            
+            // Se state[2] começa com 4 dígitos (ex: "4003 - Entrada") e state[1] não, estão invertidos!
+            if (/^\d{4}/.test(realFam) && !/^\d{4}/.test(realOp)) {
+                realOp = String(state[2] || '').trim();
+                realFam = String(state[1] || '').trim();
+            }
+
+            // -----------------------------------------------------------------
+            // FILTRO DE OPERAÇÕES DE VENDA
+            // -----------------------------------------------------------------
+            if (realOp !== "") {
+                const isValidOp = VALID_OPERATIONS.some(op => realOp.startsWith(op));
+                if (!isValidOp) continue; // Pula folha se não for venda
+            }
+
             // Extrai e classifica o documento:
             //   CNPJ — 14 dígitos (pessoa jurídica brasileira)
             //   CPF  — 11 dígitos (pessoa física brasileira)
@@ -168,7 +204,7 @@ async function processData(rows) {
             //          ou nó colapsado no cubo
             const docRaw    = String(row[CNPJ_COL] || '').trim();
             const docDigits = docRaw.replace(/\D/g, '');
-            const ufUpper   = String(state[3] || '').trim().toUpperCase();
+            const ufUpper   = String(state[4] || '').trim().toUpperCase();
             const isExterior = ufUpper === 'EX' || ufUpper === 'EXT' || ufUpper.startsWith('EXTERIOR');
 
             let docTipo = 'ND';
@@ -196,21 +232,29 @@ async function processData(rows) {
                         phantomCount++;
                         phantomValor += valor;
                     } else {
+                        // Correção para não confundir a Família "PRODUTOS" do ERP com a Classificação "Produto"
+                        let famStr = realFam || 'NÃO IDENTIFICADO';
+                        if (famStr.trim().toUpperCase() === 'PRODUTOS') {
+                            famStr = 'OUTROS SERVIÇOS';
+                        }
+
                         tidyData.push({
-                            Ano:           row[row.length - 1],
-                            Centro:        normalizeCentro(state[0]),
-                            Familia:       state[1] || 'NÃO IDENTIFICADO',
-                            Produto:       state[2] || 'NÃO DEFINIDO',
-                            UF:            state[3] || 'ND',
-                            Cidade:        state[4] || 'NÃO DEFINIDO',
-                            Cliente:       state[5] || 'NÃO IDENTIFICADO',
-                            CNPJ:          docDigits,
-                            CNPJRaiz:      cnpjRaiz,
-                            TipoDocumento: docTipo,
-                            Mes:           mesesBase[monthIndex],
-                            Valor:         valor,
-                            Quantidade:    quant,
-                            MesId:         monthIndex
+                            Ano:                 row[row.length - 1],
+                            Centro:              normalizeCentro(state[0]),
+                            OperacaoFaturamento: realOp,
+                            TipoOperacao:        classificarTipoOperacao(normalizeCentro(state[0]), famStr),
+                            Familia:             famStr,
+                            Produto:             state[3] || 'NÃO DEFINIDO',
+                            UF:                  state[4] || 'ND',
+                            Cidade:              state[5] || 'NÃO DEFINIDO',
+                            Cliente:             state[6] || 'NÃO IDENTIFICADO',
+                            CNPJ:                docDigits,
+                            CNPJRaiz:            cnpjRaiz,
+                            TipoDocumento:       docTipo,
+                            Mes:                 mesesBase[monthIndex],
+                            Valor:               valor,
+                            Quantidade:          quant,
+                            MesId:               monthIndex
                         });
                     }
                 }
@@ -243,8 +287,17 @@ async function processData(rows) {
     const valorAfetado = sdRegs.reduce((acc, d) => acc + (d.Valor || 0), 0);
     const valorExterior = extRegs.reduce((acc, d) => acc + (d.Valor || 0), 0);
 
-    document.getElementById('file-status').innerText =
-        `Base: ${globalData.length} reg. (${comCnpj} CNPJ / ${comCpf} CPF / ${comExt} EXT / ${semDoc} ND)`;
+    // Status na sidebar: linguagem de negócio (anos + total + alerta se houver
+    // registro sem documento); o detalhamento técnico CNPJ/CPF/EXT/ND fica no
+    // tooltip (hover) para não expor jargão ao usuário final.
+    const statusEl = document.getElementById('file-status');
+    const anosCarregados = [...new Set(tidyData.map(d => d.Ano))].sort().join(', ');
+    const totalFmt = globalData.length.toLocaleString('pt-BR');
+    statusEl.innerText = `Base: ${totalFmt} registros (${anosCarregados})` +
+        (semDoc > 0 ? ` · ⚠️ ${semDoc} sem documento` : '');
+    statusEl.title =
+        `CNPJ: ${comCnpj.toLocaleString('pt-BR')} · CPF: ${comCpf.toLocaleString('pt-BR')} · ` +
+        `Exterior (EXT): ${comExt.toLocaleString('pt-BR')} · Sem documento (ND): ${semDoc.toLocaleString('pt-BR')}`;
 
     console.log(`[Base] Total: ${tidyData.length} | CNPJ: ${comCnpj} | CPF: ${comCpf} | Exterior: ${comExt} | Sem doc: ${semDoc}`);
 
@@ -295,6 +348,12 @@ async function processData(rows) {
     if (typeof updateLoading === 'function') updateLoading('Renderizando dashboard…');
     if (typeof yieldUI === 'function') await yieldUI();
     updateDashboard();
+
+    // Remove a classe pre-data para ocultar o painel de boas-vindas e exibir o dashboard
+    const mainCanvas = document.querySelector('.main-canvas');
+    if (mainCanvas) {
+        mainCanvas.classList.remove('pre-data');
+    }
 
     if (typeof renderFidelitySection === 'function') {
         if (typeof updateLoading === 'function') updateLoading('Calculando análise de fidelidade…');

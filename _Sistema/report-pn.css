@@ -1,0 +1,324 @@
+/* =============================================================================
+   report-pn.css — Relatório PN (modelo diretoria), páginas A4 paisagem.
+   CSS isolado: todos os seletores partem de .pn-page para não interferir no app.
+   Paleta: design system Tecpar (--tecpar-blue/green/orange em style.css).
+   ============================================================================= */
+
+/* Página A4 paisagem @96dpi: 297mm × 210mm ≈ 1123 × 794 px */
+.pn-page {
+    width: 1123px;
+    height: 794px;
+    background: #ffffff;
+    color: #1e2430;
+    font-family: 'Roboto', Arial, sans-serif;
+    font-size: 13px;
+    position: relative;
+    padding: 16px 40px 24px;
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ---------- Cabeçalho / rodapé ---------- */
+.pn-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 3px solid var(--tecpar-blue, #0033A0);
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+.pn-head-dir {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: #5a6270;
+}
+.pn-head-title {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--tecpar-blue, #0033A0);
+}
+.pn-foot {
+    position: absolute;
+    left: 40px; right: 40px; bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #8a93a3;
+    border-top: 1px solid #dde2ec;
+    padding-top: 5px;
+}
+
+.pn-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* ---------- Tabelas mensais (Serviços / Produtos / Geral) ---------- */
+.pn-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 6px;
+    table-layout: fixed;
+}
+.pn-tbl th, .pn-tbl td {
+    border: 1px solid #ffffff;
+    padding: 3px 5px;
+    text-align: right;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.pn-tbl th { text-align: center; font-weight: 700; }
+.pn-tbl th:first-child, .pn-tbl td:first-child { text-align: left; width: 170px; }
+.pn-tbl thead th {
+    background: var(--tecpar-blue, #0033A0);
+    color: #fff;
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 11px;
+}
+.pn-tbl .pn-col-total { font-weight: 700; }
+.pn-row-fat  td { background: #e3ebfa; }           /* Faturado ano-base */
+.pn-row-meta td { background: #ffe9d6; }           /* Meta */
+.pn-row-ant  td { background: #f4f2df; }           /* Faturado ano anterior */
+.pn-row-qtd  td { background: #e5f3e8; font-size: 9.5px; } /* Qtd exec-plan */
+.pn-row-fat td:first-child, .pn-row-meta td:first-child,
+.pn-row-ant td:first-child, .pn-row-qtd td:first-child { font-weight: 700; }
+
+.pn-nota {
+    font-size: 10.5px;
+    color: #8a93a3;
+    margin: -4px 0 8px;
+}
+
+/* ---------- Velocímetros ---------- */
+.pn-gauges {
+    display: flex;
+    gap: 18px;
+    justify-content: space-between;
+    margin-top: 2px;
+}
+.pn-gauge {
+    flex: 1;
+    border: 1px solid #dde2ec;
+    border-radius: 6px;
+    padding: 4px 8px;
+    text-align: center;
+}
+.pn-gauge-title {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #39414e;
+    margin-bottom: 2px;
+}
+.pn-gauge-legenda {
+    width: 100%;
+    font-size: 11.5px;
+    border-collapse: collapse;
+    margin-top: -6px;
+}
+.pn-gauge-legenda td { padding: 2px 6px; border-top: 1px solid #eef1f7; }
+.pn-gauge-legenda td:first-child { text-align: left; color: #5a6270; }
+.pn-gauge-legenda td:last-child { text-align: right; font-weight: 700; }
+
+/* ---------- Página de gráficos por centro ---------- */
+.pn-2col { display: flex; gap: 20px; flex: 1; min-height: 0; }
+.pn-2col > div { flex: 1; border: 1px solid #dde2ec; border-radius: 6px; padding: 8px 10px; min-width: 0; }
+.pn-chart-title {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #39414e;
+    text-align: center;
+    margin-bottom: 4px;
+}
+.pn-chart-img { width: 100%; display: block; }
+
+/* ---------- Top 15 ---------- */
+.pn-top15 {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+}
+.pn-top15 th {
+    background: var(--tecpar-blue, #0033A0);
+    color: #fff;
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 11.5px;
+    padding: 4px 8px;
+    text-align: left;
+}
+.pn-top15 th:last-child { text-align: right; width: 130px; }
+.pn-top15 td { padding: 3px 8px; border-bottom: 1px solid #eef1f7; }
+.pn-top15 td:last-child { text-align: right; white-space: nowrap; }
+.pn-top15 tr:nth-child(even) td { background: #f6f8fc; }
+.pn-top15 .pn-top15-total td {
+    background: #ffe9d6;
+    font-weight: 700;
+    border-top: 2px solid var(--tecpar-orange, #F58220);
+}
+.pn-top15-resto {
+    font-size: 10.5px;
+    color: #5a6270;
+    font-style: italic;
+    margin-top: 4px;
+}
+
+/* ---------- Campos da capa no painel da aba Relatório (R4) ---------- */
+.pn-capa-campos { display: flex; flex-direction: column; gap: 6px; }
+.pn-capa-campo {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 8px;
+    border: 1px solid #d4dae6;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: 'Roboto', Arial, sans-serif;
+    resize: vertical;
+}
+.pn-capa-campo:focus { outline: 2px solid rgba(0, 51, 160, .25); }
+
+/* ---------- Página de capa (R4) ---------- */
+.pn-capa-cabecalho {
+    text-align: center;
+    margin: 10px 0 22px;
+}
+.pn-capa-cabecalho .t1 {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--tecpar-blue, #0033A0);
+}
+.pn-capa-cabecalho .t2 {
+    font-size: 14px;
+    color: #5a6270;
+    margin-top: 4px;
+}
+.pn-capa-secao { margin-bottom: 18px; }
+.pn-capa-secao-titulo {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--tecpar-blue, #0033A0);
+    border-bottom: 2px solid var(--tecpar-orange, #F58220);
+    display: inline-block;
+    padding-bottom: 2px;
+    margin-bottom: 8px;
+}
+.pn-capa-secao ul { margin: 0; padding-left: 20px; }
+.pn-capa-secao li { font-size: 13.5px; line-height: 1.55; margin-bottom: 6px; }
+.pn-capa-vazia { color: #8a93a3; font-size: 12.5px; font-style: italic; }
+
+/* ---------- Páginas de detalhe por centro (R3) ---------- */
+.pn-3col { display: flex; gap: 16px; flex: 1; min-height: 0; align-items: flex-start; }
+.pn-3col > div { flex: 1; min-width: 0; }
+.pn-3col > .pn-col-pct { flex: 0 0 218px; }
+
+.pn-pct-block {
+    border: 1px solid #dde2ec;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+}
+.pn-pct-title {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #ffffff;
+    background: var(--tecpar-blue, #0033A0);
+    border-radius: 4px;
+    padding: 4px 8px;
+    margin: -8px -10px 6px;
+    text-align: center;
+}
+.pn-pct-linha { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid #eef1f7; }
+.pn-pct-linha:last-child { border-bottom: none; }
+.pn-pct-linha .v { font-weight: 700; }
+.pn-pct-linha .v.pos { color: #2E7D32; }
+.pn-pct-linha .v.neg { color: #C62828; }
+
+/* Tabela de famílias (muitas colunas → fonte menor) */
+.pn-tbl-familias th, .pn-tbl-familias td { font-size: 9.5px; padding: 2px 4px; }
+.pn-tbl-familias th:first-child, .pn-tbl-familias td:first-child { width: 230px; white-space: normal; }
+.pn-tbl-familias thead th { white-space: normal; }
+.pn-tbl-familias tbody td { background: #f6f8fc; }
+.pn-tbl-familias tbody tr:nth-child(even) td { background: #eef1f8; }
+.pn-tbl-familias .pn-fam-total td { background: #ffe9d6; font-weight: 700; }
+.pn-tbl-familias .pn-flag { font-weight: 700; color: var(--tecpar-orange, #F58220); }
+
+/* Divisor de grupos de colunas (mês ref × acumulado) */
+.pn-tbl-familias th.pn-sep, .pn-tbl-familias td.pn-sep { border-left: 2px solid #c9d2e4; }
+
+/* ---------- Modo apresentação (tela cheia, estilo PowerPoint) ---------- */
+#pn-present {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: #0b1220;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
+#pn-present .pn-present-slide {
+    max-width: 100vw;
+    max-height: 100vh;
+    object-fit: contain;
+    box-shadow: 0 0 60px rgba(0, 0, 0, .6);
+    cursor: pointer; /* clique avança, como no PowerPoint */
+}
+#pn-present .pn-present-loading {
+    color: #9fb0d0;
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 18px;
+}
+#pn-present .pn-present-controls {
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(11, 18, 32, .82);
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 24px;
+    padding: 6px 14px;
+    opacity: .35;
+    transition: opacity .25s;
+}
+#pn-present .pn-present-controls:hover { opacity: 1; }
+#pn-present .pn-present-controls button {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+#pn-present .pn-present-controls button:hover { color: var(--tecpar-orange, #F58220); }
+#pn-present .pn-present-contador {
+    color: #d7deec;
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 13px;
+    min-width: 52px;
+    text-align: center;
+}
+#pn-present .pn-present-hint {
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    color: rgba(215, 222, 236, .55);
+    font-size: 12px;
+}
+
+/* ---------- Pré-visualização na aba (páginas capturadas como imagem) ---------- */
+.pn-preview-pagina {
+    margin: 0 auto 16px;
+    max-width: 900px;
+    box-shadow: 0 2px 10px rgba(20, 33, 61, .18);
+}
+.pn-preview-pagina img { width: 100%; display: block; }

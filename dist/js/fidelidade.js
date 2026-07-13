@@ -13,6 +13,12 @@
 const MESES_ORDEM = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 let _fidelityFiltersInited = false;
+let _fidelidadeAnosCache = [];
+let _cachePerdidos = [];
+let _cacheCampeoes = [];
+let _cacheVoltadores = [];
+let _drilldownActiveList = [];
+let _drilldownActiveFlow = '';
 
 /**
  * Garante que os filtros da aba estão populados e ligados.
@@ -43,27 +49,86 @@ function _initFidelityFilters() {
 }
 
 /**
- * Popula o seletor de Ano-base com os anos disponíveis em globalData.
- * Default: penúltimo ano disponível (assim já há um "ano à frente" para comparar).
+ * Gera os períodos dinâmicos baseados na granularidade selecionada e na base de dados.
+ */
+function _gerarPeriodos(granularidade, modo2026) {
+    const recs = globalData || [];
+    if (recs.length === 0) return [];
+
+    const anosUnicos = [...new Set(recs.map(d => d.Ano))].sort();
+    
+    // Calcula o teto global (último mês do ano mais recente)
+    let tetoGlobal = 11;
+    if (modo2026 === 'mesmo_periodo' && anosUnicos.length > 0) {
+        const anoMaisRecente = anosUnicos[anosUnicos.length - 1];
+        let max = -1;
+        for (const d of recs) {
+            if (d.Ano === anoMaisRecente) {
+                const mid = d.MesId !== undefined ? d.MesId : MESES_ORDEM.indexOf(d.Mes);
+                if (mid > max) max = mid;
+            }
+        }
+        if (max >= 0) tetoGlobal = max;
+    }
+
+    const periodos = [];
+    anosUnicos.forEach(ano => {
+        let maxMesId = -1;
+        for (const d of recs) {
+            if (d.Ano === ano) {
+                const mid = d.MesId !== undefined ? d.MesId : MESES_ORDEM.indexOf(d.Mes);
+                if (mid > maxMesId) maxMesId = mid;
+            }
+        }
+        if (maxMesId < 0) return;
+
+        const maxConsiderado = (modo2026 === 'mesmo_periodo') ? Math.min(maxMesId, tetoGlobal) : maxMesId;
+        
+        const addP = (prefix, f, t) => {
+            if (f > maxConsiderado && ano === anosUnicos[anosUnicos.length-1]) return;
+            const tetoFinal = (modo2026 === 'mesmo_periodo') ? Math.min(t, maxConsiderado) : t;
+            if (f <= tetoFinal) {
+                periodos.push({ label: prefix, ano: ano, from: f, to: tetoFinal });
+            }
+        };
+
+        if (granularidade === 'anual') { addP(ano, 0, 11); }
+        else if (granularidade === 'semestral') { addP(`${ano}-S1`, 0, 5); addP(`${ano}-S2`, 6, 11); }
+        else if (granularidade === 'trimestral') { addP(`${ano}-T1`, 0, 2); addP(`${ano}-T2`, 3, 5); addP(`${ano}-T3`, 6, 8); addP(`${ano}-T4`, 9, 11); }
+        else if (granularidade === 'bimestral') { addP(`${ano}-B1`, 0, 1); addP(`${ano}-B2`, 2, 3); addP(`${ano}-B3`, 4, 5); addP(`${ano}-B4`, 6, 7); addP(`${ano}-B5`, 8, 9); addP(`${ano}-B6`, 10, 11); }
+        else if (granularidade === 'mensal') { for (let i = 0; i <= 11; i++) addP(`${ano}-${MESES_ORDEM[i]}`, i, i); }
+    });
+
+    return periodos;
+}
+
+/**
+ * Popula o seletor de Ano-base com os períodos disponíveis.
  */
 function _popularAnoBase() {
     const sel = document.getElementById('fid-ano-base');
     if (!sel) return;
 
-    const anos = [...new Set((globalData || []).map(d => d.Ano))].sort();
-    if (anos.length === 0) {
+    const filtros = _lerFiltrosFid();
+    const periodos = _gerarPeriodos(filtros.granularidade, filtros.modo2026);
+    
+    if (periodos.length === 0) {
         sel.innerHTML = '<option value="">Aguardando dados</option>';
         return;
     }
 
     const valorAtual = sel.value;
-    sel.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
+    sel.innerHTML = periodos.map(p => `<option value="${p.label}">${p.label}</option>`).join('');
 
-    if (valorAtual && anos.includes(valorAtual)) {
+    if (valorAtual && periodos.some(p => p.label === valorAtual)) {
         sel.value = valorAtual;
     } else {
-        // Default: penúltimo ano (deixa um "ano à frente" para análise de retenção)
-        sel.value = anos[Math.max(0, anos.length - 2)];
+        let defaultIdx = 0;
+        if (filtros.granularidade === 'anual') defaultIdx = Math.max(0, periodos.length - 2);
+        else if (filtros.granularidade === 'semestral') defaultIdx = Math.max(0, periodos.length - 3);
+        else if (filtros.granularidade === 'trimestral') defaultIdx = Math.max(0, periodos.length - 5);
+        else defaultIdx = Math.max(0, periodos.length - 2);
+        sel.value = periodos[defaultIdx].label;
     }
 }
 
@@ -93,63 +158,34 @@ function _lerFiltrosFid() {
 // Cálculos: agregação por cliente, identificação de coorte, retenção
 // -----------------------------------------------------------------------------
 
-/**
- * Detecta o último mês do "ano parcial" mais recente em globalData.
- * Ex: se 2026 só tem registros até Mai, retorna 4 (Mai, indexado em 0).
- * Iteração explícita (evita Math.max(...arr) que pode estourar pilha).
- */
-function _ultimoMesId(ano) {
-    let max = -1;
-    const recs = globalData || [];
-    for (let i = 0; i < recs.length; i++) {
-        const d = recs[i];
-        if (d.Ano !== ano) continue;
-        const mesId = d.MesId !== undefined ? d.MesId : MESES_ORDEM.indexOf(d.Mes);
-        if (mesId > max) max = mesId;
-    }
-    return max;
-}
+// Funções antigas _ultimoMesId e _intervaloMeses foram absorvidas por _gerarPeriodos
 
 /**
- * Determina o intervalo de meses a considerar para um ano dado os filtros.
- * Retorna {from, to} com índices (0=Jan, 11=Dez), inclusivos em ambos os lados.
- */
-function _intervaloMeses(ano, anos, modo2026) {
-    const lastFull = _ultimoMesId(ano); // último mês com dado nesse ano
-    if (lastFull < 0) return { from: 0, to: 11 };
-
-    if (modo2026 === 'ano_cheio') {
-        return { from: 0, to: 11 };
-    }
-    // mesmo_periodo: usa o último mês do ANO MAIS RECENTE como teto comum
-    const anoMaisRecente = anos[anos.length - 1];
-    const tetoComum = _ultimoMesId(anoMaisRecente);
-    return { from: 0, to: tetoComum >= 0 ? tetoComum : lastFull };
-}
-
-/**
- * Soma faturamento por cliente em um ano (com janela de meses opcional).
+ * Soma faturamento por cliente em um período.
  * Retorna um Map(chave => {valor, nome, registroExemplo}).
  */
-function _faturamentoPorCliente(ano, mesFrom, mesTo, filtroSetor) {
+function _faturamentoPorCliente(periodo, filtroSetor) {
     const map = new Map();
     const recs = globalData || [];
 
-    // Obtém filtros globais da sidebar
     const fCentro = typeof window.getCheckedCentros === 'function' ? window.getCheckedCentros() : "ALL";
+    const setCentro = fCentro !== "ALL" && Array.isArray(fCentro) ? new Set(fCentro) : null;
+    
     const elUf = document.getElementById('filter-uf');
     const fUf = elUf ? elUf.value : "ALL";
+    
     const fCliente = typeof window.getCheckedClientes === 'function' ? window.getCheckedClientes() : "ALL";
+    const setCliente = fCliente !== "ALL" && Array.isArray(fCliente) ? new Set(fCliente) : null;
 
     for (const d of recs) {
-        if (d.Ano !== ano) continue;
+        if (d.Ano !== periodo.ano) continue;
         const mesId = d.MesId !== undefined ? d.MesId : MESES_ORDEM.indexOf(d.Mes);
-        if (mesId < mesFrom || mesId > mesTo) continue;
+        if (mesId < periodo.from || mesId > periodo.to) continue;
 
-        // Aplica os filtros estruturais globais (ignora Mês para respeitar a Coorte)
-        if (fCentro !== "ALL" && Array.isArray(fCentro) && !fCentro.includes(d.Centro)) continue;
+        // Aplica os filtros estruturais globais O(1) usando Set
+        if (setCentro && !setCentro.has(d.Centro)) continue;
         if (fUf !== "ALL" && d.UF !== fUf) continue;
-        if (fCliente !== "ALL" && Array.isArray(fCliente) && !fCliente.includes(d.Cliente)) continue;
+        if (setCliente && !setCliente.has(d.Cliente)) continue;
 
         // Filtro de setor (Público/Privado/Exterior/Todos)
         if (filtroSetor && filtroSetor !== 'TODOS') {
@@ -216,23 +252,24 @@ function _definirCoorte(faturamentoBase, filtros) {
 }
 
 /**
- * Calcula retenção entre o ano-base e cada um dos anos subsequentes.
+ * Calcula retenção entre o período-base e cada um dos períodos subsequentes.
  * Retorna array [{ano, retidos, total, taxa, valorRetido, valorPerdido}].
  */
-function _calcularRetencao(filtros, anos) {
-    const idxBase = anos.indexOf(filtros.anoBase);
+function _calcularRetencao(filtros, periodos) {
+    const baseLabel = filtros.anoBase;
+    const idxBase = periodos.findIndex(p => p.label === baseLabel);
     if (idxBase < 0) return [];
 
-    const intBase = _intervaloMeses(filtros.anoBase, anos, filtros.modo2026);
-    const fatBase = _faturamentoPorCliente(filtros.anoBase, intBase.from, intBase.to, filtros.setor);
+    const pBase = periodos[idxBase];
+    const fatBase = _faturamentoPorCliente(pBase, filtros.setor);
     const coorte  = _definirCoorte(fatBase, filtros);
 
     const valorCoorteTotal = [...coorte].reduce((s,k) => s + (fatBase.get(k)?.valor || 0), 0);
 
     const resultado = [];
-    // Ponto inicial: o próprio ano-base (100% trivial, mas serve para o gráfico)
+    // Ponto inicial: o próprio período-base (100% trivial, mas serve para o gráfico)
     resultado.push({
-        ano:           filtros.anoBase,
+        ano:           pBase.label,
         retidos:       coorte.size,
         total:         coorte.size,
         taxa:          coorte.size === 0 ? 0 : 1,
@@ -241,10 +278,9 @@ function _calcularRetencao(filtros, anos) {
         isBase:        true
     });
 
-    for (let i = idxBase + 1; i < anos.length; i++) {
-        const anoComp = anos[i];
-        const intComp = _intervaloMeses(anoComp, anos, filtros.modo2026);
-        const fatComp = _faturamentoPorCliente(anoComp, intComp.from, intComp.to, filtros.setor);
+    for (let i = idxBase + 1; i < periodos.length; i++) {
+        const pAtual = periodos[i];
+        const fatComp = _faturamentoPorCliente(pAtual, filtros.setor);
 
         // Computa coorteComp uma única vez para evitar recálculo dentro do loop
         const coorteComp = (filtros.tipoRetencao === 'topn')
@@ -268,7 +304,7 @@ function _calcularRetencao(filtros, anos) {
         });
 
         resultado.push({
-            ano:          anoComp,
+            ano:          pAtual.label,
             retidos,
             total:        coorte.size,
             taxa:         coorte.size === 0 ? 0 : retidos / coorte.size,
@@ -302,14 +338,21 @@ function renderFidelitySection() {
         return;
     }
 
-    const anos = [...new Set(globalData.map(d => d.Ano))].sort();
-    const retencao = _calcularRetencao(filtros, anos);
+    const periodos = _gerarPeriodos(filtros.granularidade, filtros.modo2026);
+    _fidelidadeAnosCache = periodos; 
+    
+    if (periodos.length === 0) {
+        _renderPlaceholders();
+        return;
+    }
+
+    const retencao = _calcularRetencao(filtros, periodos);
 
     _renderKPIs(retencao);
     _renderCoorteChart(retencao, filtros);
-    _renderMatrizMigracao(anos, filtros);
-    _renderGruposInstitucionais(anos, filtros);
-    _renderListasAcionaveis(filtros, anos);
+    _renderMatrizMigracao(periodos, filtros);
+    _renderGruposInstitucionais(periodos, filtros);
+    _renderListasAcionaveis(filtros, periodos);
 }
 
 function _renderPlaceholders() {
@@ -396,7 +439,7 @@ function _renderCoorteChart(retencao, filtros) {
             { name: '% Retenção',  type: 'line', data: taxas },
             { name: 'Clientes',    type: 'column', data: counts }
         ],
-        xaxis: { categories: categorias, title: { text: 'Ano' } },
+        xaxis: { categories: categorias, title: { text: 'Período' } },
         yaxis: [
             {
                 title: { text: '% Retenção' },
@@ -442,16 +485,30 @@ function _descricaoCoorte(filtros) {
     return coorteDesc + setorDesc + tipoDesc;
 }
 
-function _renderGruposInstitucionais(anos, filtros) {
-    const head = document.getElementById('fid-grupos-head');
+function _renderGruposInstitucionais(periodos, filtros) {
+    const thead = document.getElementById('fid-grupos-head');
     const body = document.getElementById('fid-grupos-body');
-    if (!head || !body) return;
+    if (!thead || !body) return;
 
-    // Para cada ano, calcula a classificação institucional e contagens
-    const porAno = {};
-    anos.forEach(ano => {
-        const intervalo = _intervaloMeses(ano, anos, filtros.modo2026);
-        const fat = _faturamentoPorCliente(ano, intervalo.from, intervalo.to, filtros.setor);
+    if (periodos.length === 0) return;
+
+    // Filtra período base para frente, limitando a max 5 colunas para não estourar layout
+    let idxBase = periodos.findIndex(p => p.label === filtros.anoBase);
+    if (idxBase < 0) idxBase = 0;
+    const periodosVisiveis = periodos.slice(idxBase, idxBase + 5);
+
+    let theadHtml = '<tr><th style="width:120px;">Grupo Institucional</th><th>Definição</th>';
+    periodosVisiveis.forEach((p, i) => {
+        if (i > 0) theadHtml += `<th style="text-align:center;" title="Retenção deste grupo em relação ao período anterior">Retenção</th>`;
+        theadHtml += `<th style="text-align:center;">Qtd ${p.label}</th><th style="text-align:right;">Fat. ${p.label}</th>`;
+    });
+    theadHtml += '</tr>';
+    thead.innerHTML = theadHtml;
+
+    // Calcula faturamento/classificação por período
+    const porPeriodo = {};
+    periodosVisiveis.forEach(p => {
+        const fat = _faturamentoPorCliente(p, filtros.setor);
         const grupos = _classificarGruposInstitucionais(fat);
 
         const stats = { '1A':{n:0,v:0}, '1B':{n:0,v:0}, '2A':{n:0,v:0}, '2B':{n:0,v:0}, '2C':{n:0,v:0}, 'EXT':{n:0,v:0}, 'TOTAL':{n:0,v:0} };
@@ -460,25 +517,8 @@ function _renderGruposInstitucionais(anos, filtros) {
             stats[g].n++; stats[g].v += v;
             stats.TOTAL.n++; stats.TOTAL.v += v;
         });
-        porAno[ano] = { stats, mapaClientes: grupos };
+        porPeriodo[p.label] = { stats, mapaClientes: grupos };
     });
-
-    // Cabeçalho: Grupo | Definição | (#/R$ por ano) | (Ret % entre anos consecutivos)
-    let headHtml = '<tr style="background-color:#0033A0; color:white;">';
-    headHtml += '<th rowspan="2" style="padding:6px 10px; text-align:left;">Grupo</th>';
-    headHtml += '<th rowspan="2" style="padding:6px 10px; text-align:left;">Definição</th>';
-    anos.forEach((ano, i) => {
-        const span = (i === 0) ? 2 : 3;
-        headHtml += `<th colspan="${span}" style="padding:6px 8px; text-align:center; border-left:1px solid #002575;">${ano}</th>`;
-    });
-    headHtml += '</tr><tr style="background-color:#1F4E79; color:white;">';
-    anos.forEach((ano, i) => {
-        if (i > 0) headHtml += '<th style="padding:5px 6px; text-align:center; font-size:10px;">Retenção</th>';
-        headHtml += '<th style="padding:5px 6px; text-align:center; font-size:10px;">Clientes</th>';
-        headHtml += '<th style="padding:5px 6px; text-align:center; font-size:10px;">Faturamento</th>';
-    });
-    headHtml += '</tr>';
-    head.innerHTML = headHtml;
 
     const definicoes = {
         '1A':  'Público — Grandes (≥6%)',
@@ -502,13 +542,13 @@ function _renderGruposInstitucionais(anos, filtros) {
         bodyHtml += `<tr style="background-color:${bg}; ${isTotal ? 'font-weight:700; border-top:2px solid #C9982C;' : ''}">`;
         bodyHtml += `<td style="padding:5px 10px; border-left:4px solid ${corGrupo[g]}; font-weight:${isTotal ? '700' : '600'};">${g}</td>`;
         bodyHtml += `<td style="padding:5px 10px; font-size:11px;">${definicoes[g]}</td>`;
-        anos.forEach((ano, i) => {
-            const stats = porAno[ano].stats[g];
+        periodosVisiveis.forEach((p, i) => {
+            const stats = porPeriodo[p.label].stats[g];
             if (i > 0) {
-                // Coluna de Retenção do ano anterior para este grupo
-                const anoPrev = anos[i-1];
-                const mapaPrev = porAno[anoPrev].mapaClientes;
-                const mapaAtual = porAno[ano].mapaClientes;
+                // Coluna de Retenção do período anterior para este grupo
+                const pPrev = periodosVisiveis[i-1];
+                const mapaPrev = porPeriodo[pPrev.label].mapaClientes;
+                const mapaAtual = porPeriodo[p.label].mapaClientes;
                 let coortePrev, retidos = 0;
                 if (g === 'TOTAL') {
                     coortePrev = new Set(mapaPrev.keys());
@@ -535,33 +575,34 @@ function _renderGruposInstitucionais(anos, filtros) {
 // Matriz de Migração Institucional 5x5
 // -----------------------------------------------------------------------------
 
-function _renderMatrizMigracao(anos, filtros) {
+function _renderMatrizMigracao(periodos, filtros) {
     const selOrigem = document.getElementById('fid-migracao-ano-origem');
     const selDestino = document.getElementById('fid-migracao-ano-destino');
-    if (!selOrigem || !selDestino || anos.length < 2) return;
+    if (!selOrigem || !selDestino || periodos.length < 2) return;
 
     // Popula selects se vazios ou com opções antigas
-    if (selOrigem.options.length <= 1 || selOrigem.options[0].value !== anos[0]) {
-        selOrigem.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
-        selDestino.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
+    if (selOrigem.options.length <= 1 || selOrigem.options[0].value !== periodos[0].label) {
+        selOrigem.innerHTML = periodos.map(p => `<option value="${p.label}">${p.label}</option>`).join('');
+        selDestino.innerHTML = periodos.map(p => `<option value="${p.label}">${p.label}</option>`).join('');
         
-        // Default: ano-base como origem, ano+1 como destino (se existir)
-        selOrigem.value = filtros.anoBase || anos[anos.length - 2];
-        const idxOrig = anos.indexOf(selOrigem.value);
-        selDestino.value = (idxOrig >= 0 && idxOrig < anos.length - 1) ? anos[idxOrig + 1] : anos[anos.length - 1];
+        // Default: período-base como origem, p+1 como destino
+        selOrigem.value = filtros.anoBase || periodos[periodos.length - 2].label;
+        const idxOrig = periodos.findIndex(p => p.label === selOrigem.value);
+        selDestino.value = (idxOrig >= 0 && idxOrig < periodos.length - 1) ? periodos[idxOrig + 1].label : periodos[periodos.length - 1].label;
 
         // Se por algum motivo ficarem iguais, tenta corrigir
-        if (selOrigem.value === selDestino.value && anos.length > 1) {
-            selDestino.value = selOrigem.value === anos[0] ? anos[1] : anos[0];
+        if (selOrigem.value === selDestino.value && periodos.length > 1) {
+            selDestino.value = selOrigem.value === periodos[0].label ? periodos[1].label : periodos[0].label;
         }
 
-        // Attach event listeners (somente 1 vez, usando dataset pra controle)
+        // Attach event listeners
         if (!selOrigem.dataset.listener) {
             const redraw = () => {
-                const currentAnos = [...new Set((globalData || []).map(d => d.Ano))].sort();
                 const curFiltros = _lerFiltrosFid();
-                _renderMatrizMigracao(currentAnos, curFiltros);
-                _renderListasAcionaveis(curFiltros, currentAnos);
+                const currentPeriodos = _gerarPeriodos(curFiltros.granularidade, curFiltros.modo2026);
+                if (typeof window.fecharDrillDown === 'function') window.fecharDrillDown();
+                _renderMatrizMigracao(currentPeriodos, curFiltros);
+                _renderListasAcionaveis(curFiltros, currentPeriodos);
             };
             selOrigem.addEventListener('change', redraw);
             selDestino.addEventListener('change', redraw);
@@ -577,18 +618,18 @@ function _renderMatrizMigracao(anos, filtros) {
     if (!head || !body) return;
 
     if (anoN === anoN1) {
-        body.innerHTML = `<tr><td colspan="9" class="placeholder-text">Selecione anos diferentes para comparar a migração.</td></tr>`;
+        body.innerHTML = `<tr><td colspan="9" class="placeholder-text">Selecione períodos diferentes para comparar a migração.</td></tr>`;
         head.innerHTML = '';
         return;
     }
 
-    // Calcula os mapas de faturamento e classificação para os dois anos
-    const intN = _intervaloMeses(anoN, anos, filtros.modo2026);
-    const fatN = _faturamentoPorCliente(anoN, intN.from, intN.to, filtros.setor);
+    const pN = periodos.find(p => p.label === anoN);
+    const pN1 = periodos.find(p => p.label === anoN1);
+
+    const fatN = _faturamentoPorCliente(pN, filtros.setor);
     const gruposN = _classificarGruposInstitucionais(fatN);
 
-    const intN1 = _intervaloMeses(anoN1, anos, filtros.modo2026);
-    const fatN1 = _faturamentoPorCliente(anoN1, intN1.from, intN1.to, filtros.setor);
+    const fatN1 = _faturamentoPorCliente(pN1, filtros.setor);
     const gruposN1 = _classificarGruposInstitucionais(fatN1);
 
     const categorias = ['1A', '1B', '2A', '2B', '2C', 'EXT'];
@@ -636,49 +677,55 @@ function _renderMatrizMigracao(anos, filtros) {
     head.innerHTML = headHtml;
 
     // Índices de hierarquia para saber se o cliente subiu ou caiu de faixa
-    // Grupos Públicos (1) e Privados (2) e EXT
     const rank = {'1A':1, '1B':2, '2A':3, '2B':4, '2C':5, 'EXT':6};
     
+    const descricoes = {
+        '1A': 'Público ≥ 6%',
+        '1B': 'Público < 6%',
+        '2A': 'Privado > 1%',
+        '2B': 'Privado 0,1% – 0,999%',
+        '2C': 'Privado < 0,1%',
+        'EXT': 'Exterior'
+    };
+
     let bodyHtml = '';
     const renderLinha = (o, isEntrou) => {
+        const descHtml = descricoes[o] ? ` <span style="font-size:11px; font-weight:normal; color:#666;">(${descricoes[o]})</span>` : '';
         let rowHtml = `<tr style="border-bottom:1px solid #eee;">
-            <td style="padding:6px 10px; font-weight:600; border-right:2px solid #ccc; background-color:#f5f6fb;">${o}</td>`;
+            <td style="padding:6px 10px; font-weight:700; border-right:2px solid #ccc; background-color:#f5f6fb;">${o}${descHtml}</td>`;
         
         ordemDestino.forEach(d => {
             const count = matriz[o][d];
             const pct = totalOrigem[o] > 0 ? (count / totalOrigem[o] * 100).toFixed(1) : 0;
             
-            let corFundo = '#ffffff';
-            let corTexto = '#000000';
-            let fontWeight = 'normal';
+            let classeCel = '';
+            let clickAttr = '';
 
             if (count > 0) {
+                let catCel = '';
                 if (isEntrou) {
-                    corFundo = '#DDEBF7'; // Azul claro para novas entradas
+                    catCel = 'migracao-celula-entrou';
                 } else if (d === 'SAIU') {
-                    corFundo = '#FCE4D6'; // Laranja claro para quem saiu
-                    corTexto = '#C65911'; 
+                    catCel = 'migracao-celula-saiu';
                 } else if (o === d) {
-                    corFundo = '#E2EFDA'; // Verde claro para quem ficou na mesma faixa
-                    corTexto = '#385623';
-                    fontWeight = '600';
+                    catCel = 'migracao-celula-igual';
                 } else {
                     const idxO = rank[o];
                     const idxD = rank[d];
                     if (idxO && idxD) {
                         if (idxD < idxO) {
-                            // Subiu de faixa (ex: 2C -> 2A) -> Positivo
-                            corFundo = '#BDD7EE';
+                            catCel = 'migracao-celula-subiu';
                         } else {
-                            // Caiu de faixa -> Alerta
-                            corFundo = '#FFF2CC'; 
+                            catCel = 'migracao-celula-caiu';
                         }
                     }
                 }
+                classeCel = `class="migracao-celula-interativa ${catCel}"`;
+                clickAttr = `onclick="window._exibirDrillDownClientes('${o}', '${d}', this)"`;
             }
 
-            const cellText = count > 0 ? `${count}<br><span style="font-size:9px; color:#666;">${pct}%</span>` : `<span style="color:#ccc;">-</span>`;
-            rowHtml += `<td style="padding:6px 10px; text-align:center; background-color:${corFundo}; color:${corTexto}; font-weight:${fontWeight};">${cellText}</td>`;
+            const cellText = count > 0 ? `${count}<br><span style="font-size:9px; opacity:0.8;">${pct}%</span>` : `<span style="color:#ccc;">-</span>`;
+            rowHtml += `<td ${classeCel} ${clickAttr}>${cellText}</td>`;
         });
         
         rowHtml += `<td style="padding:6px 10px; text-align:center; font-weight:600; border-left:2px solid #ccc; background-color:#f5f6fb;">${totalOrigem[o]}</td></tr>`;
@@ -695,12 +742,12 @@ function _renderMatrizMigracao(anos, filtros) {
 // Listas Acionáveis (Onda 3)
 // -----------------------------------------------------------------------------
 
-function _renderListasAcionaveis(filtros, anos) {
-    if (anos.length < 2) return;
+function _renderListasAcionaveis(filtros, periodos) {
+    if (periodos.length < 2) return;
     
-    // Ano Base (Origem) e Ano Comp (Destino, geralmente o mais recente)
+    // Período Base (Origem) e Período Comp (Destino, geralmente o mais recente)
     let anoBase = filtros.anoBase;
-    let anoComp = anos[anos.length - 1]; 
+    let anoComp = periodos[periodos.length - 1].label; 
     
     // Atrela ao filtro "Ano N" e "Ano N+1" da Matriz de Migração, se existirem
     const selOrigem = document.getElementById('fid-migracao-ano-origem');
@@ -711,17 +758,17 @@ function _renderListasAcionaveis(filtros, anos) {
     if (anoBase === anoComp) {
         ['fid-lista-perdidos', 'fid-lista-campeoes', 'fid-lista-voltadores'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.innerHTML = `<tr><td colspan="2" class="placeholder-text">Selecione anos diferentes.</td></tr>`;
+            if (el) el.innerHTML = `<tr><td colspan="2" class="placeholder-text">Selecione períodos diferentes.</td></tr>`;
         });
         return;
     }
 
-    const intBase = _intervaloMeses(anoBase, anos, filtros.modo2026);
-    const fatBase = _faturamentoPorCliente(anoBase, intBase.from, intBase.to, filtros.setor);
+    const pBase = periodos.find(p => p.label === anoBase);
+    const fatBase = _faturamentoPorCliente(pBase, filtros.setor);
     const coorteBase = _definirCoorte(fatBase, filtros);
 
-    const intComp = _intervaloMeses(anoComp, anos, filtros.modo2026);
-    const fatComp = _faturamentoPorCliente(anoComp, intComp.from, intComp.to, filtros.setor);
+    const pComp = periodos.find(p => p.label === anoComp);
+    const fatComp = _faturamentoPorCliente(pComp, filtros.setor);
     const coorteComp = _definirCoorte(fatComp, filtros);
 
     const perdidos = [];
@@ -731,33 +778,65 @@ function _renderListasAcionaveis(filtros, anos) {
     // 1. Perdidos: na coorteBase, mas ZERO faturamento no anoComp
     coorteBase.forEach(k => {
         if (!fatComp.has(k) || fatComp.get(k).valor === 0) {
-            perdidos.push({ chave: k, info: fatBase.get(k), valor: fatBase.get(k).valor });
+            const inf = fatBase.get(k);
+            perdidos.push({
+                chave: k,
+                info: inf,
+                valor: inf.valor,
+                doc: inf.exemplo?.CNPJ || '',
+                tipoDoc: inf.exemplo?.TipoDocumento || 'ND',
+                valorN: inf.valor,
+                valorN1: 0,
+                delta: -inf.valor,
+                deltaPct: -100
+            });
         }
     });
 
     // 2. Novos Campeões: na coorteComp, mas não estavam na coorteBase
     coorteComp.forEach(k => {
         if (!coorteBase.has(k)) {
-            campeoes.push({ chave: k, info: fatComp.get(k), valor: fatComp.get(k).valor });
+            const inf = fatComp.get(k);
+            const valBase = fatBase.has(k) ? fatBase.get(k).valor : 0;
+            const deltaVal = inf.valor - valBase;
+            const deltaPct = valBase > 0 ? (deltaVal / valBase * 100) : 100;
+            campeoes.push({
+                chave: k,
+                info: inf,
+                valor: inf.valor,
+                doc: inf.exemplo?.CNPJ || '',
+                tipoDoc: inf.exemplo?.TipoDocumento || 'ND',
+                valorN: valBase,
+                valorN1: inf.valor,
+                delta: deltaVal,
+                deltaPct: deltaPct
+            });
         }
     });
 
-    // 3. Voltadores: faturaram no anoComp, não no anoBase, E já tinham faturado antes do anoBase
-    // Cria um Set com as chaves de todos os clientes que faturaram antes do anoBase
+    // 3. Voltadores: faturaram no período de comp, não no período base, E já tinham faturado ANTES do período base
+    // Cria um Set com as chaves de todos os clientes que faturaram antes do período base
     const historicoClientes = new Set();
     const recs = globalData || [];
 
     const fCentro = typeof window.getCheckedCentros === 'function' ? window.getCheckedCentros() : "ALL";
+    const setCentro = fCentro !== "ALL" && Array.isArray(fCentro) ? new Set(fCentro) : null;
+    
     const elUf = document.getElementById('filter-uf');
     const fUf = elUf ? elUf.value : "ALL";
+    
     const fCliente = typeof window.getCheckedClientes === 'function' ? window.getCheckedClientes() : "ALL";
+    const setCliente = fCliente !== "ALL" && Array.isArray(fCliente) ? new Set(fCliente) : null;
 
     for (const d of recs) {
-        if (d.Ano < anoBase && d.Valor > 0) {
-            // Aplica os filtros estruturais globais (ignora Mês para respeitar a Coorte)
-            if (fCentro !== "ALL" && Array.isArray(fCentro) && !fCentro.includes(d.Centro)) continue;
+        const mid = d.MesId !== undefined ? d.MesId : MESES_ORDEM.indexOf(d.Mes);
+        const antesDoBase = d.Ano < pBase.ano || (d.Ano === pBase.ano && mid < pBase.from);
+
+        if (antesDoBase && d.Valor > 0) {
+            // Aplica os filtros estruturais globais O(1) usando Set
+            if (setCentro && !setCentro.has(d.Centro)) continue;
             if (fUf !== "ALL" && d.UF !== fUf) continue;
-            if (fCliente !== "ALL" && Array.isArray(fCliente) && !fCliente.includes(d.Cliente)) continue;
+            if (setCliente && !setCliente.has(d.Cliente)) continue;
 
             historicoClientes.add(chaveCliente(d));
         }
@@ -767,7 +846,17 @@ function _renderListasAcionaveis(filtros, anos) {
         if (!fatBase.has(k) || fatBase.get(k).valor === 0) {
             // Não existiu no ano base, mas existiu no ano de comparação
             if (historicoClientes.has(k)) {
-                voltadores.push({ chave: k, info: info, valor: info.valor });
+                voltadores.push({
+                    chave: k,
+                    info: info,
+                    valor: info.valor,
+                    doc: info.exemplo?.CNPJ || '',
+                    tipoDoc: info.exemplo?.TipoDocumento || 'ND',
+                    valorN: 0,
+                    valorN1: info.valor,
+                    delta: info.valor,
+                    deltaPct: 100
+                });
             }
         }
     });
@@ -776,6 +865,11 @@ function _renderListasAcionaveis(filtros, anos) {
     perdidos.sort((a, b) => b.valor - a.valor);
     campeoes.sort((a, b) => b.valor - a.valor);
     voltadores.sort((a, b) => b.valor - a.valor);
+
+    // Guardar nos caches para exportação posterior
+    _cachePerdidos = perdidos;
+    _cacheCampeoes = campeoes;
+    _cacheVoltadores = voltadores;
 
     // Função de renderização para as tabelas (similar ao Top 15)
     const renderTable = (id, lista, msgVazia) => {
@@ -808,4 +902,222 @@ function _renderListasAcionaveis(filtros, anos) {
 // na primeira renderização. Como a aba começa escondida, a chamada inicial vem
 // de switchTab() em index.html.
 // -----------------------------------------------------------------------------
+
+// =============================================================================
+// Drill-down de Clientes da Matriz de Migração (Onda 2)
+// =============================================================================
+
+window._exibirDrillDownClientes = function(origem, destino, elemento) {
+    // 1. Destaque visual da célula clicada
+    document.querySelectorAll('.migracao-celula-interativa').forEach(el => {
+        el.classList.remove('cell-active');
+    });
+    if (elemento) {
+        elemento.classList.add('cell-active');
+    }
+
+    const selOrigem = document.getElementById('fid-migracao-ano-origem');
+    const selDestino = document.getElementById('fid-migracao-ano-destino');
+    if (!selOrigem || !selDestino) return;
+
+    const anoN = selOrigem.value;
+    const anoN1 = selDestino.value;
+    const filtros = _lerFiltrosFid();
+
+    // 2. Reprocessa os faturamentos e grupos exatamente como na matriz
+    const currentPeriodos = _gerarPeriodos(filtros.granularidade, filtros.modo2026);
+    const pN = currentPeriodos.find(p => p.label === anoN);
+    const pN1 = currentPeriodos.find(p => p.label === anoN1);
+
+    const fatN = _faturamentoPorCliente(pN, filtros.setor);
+    const gruposN = _classificarGruposInstitucionais(fatN);
+
+    const fatN1 = _faturamentoPorCliente(pN1, filtros.setor);
+    const gruposN1 = _classificarGruposInstitucionais(fatN1);
+
+    // 3. Filtra os clientes pertencentes a esta célula
+    const todasChaves = new Set([...gruposN.keys(), ...gruposN1.keys()]);
+    const clientesFiltrados = [];
+
+    todasChaves.forEach(k => {
+        const gN = gruposN.get(k);
+        const gN1 = gruposN1.get(k);
+
+        let match = false;
+        let info = null;
+
+        if (origem === 'ENTROU' && !gN && gN1 === destino) {
+            match = true;
+            info = fatN1.get(k);
+        } else if (destino === 'SAIU' && gN === origem && !gN1) {
+            match = true;
+            info = fatN.get(k);
+        } else if (gN === origem && gN1 === destino) {
+            match = true;
+            info = fatN.get(k) || fatN1.get(k);
+        }
+
+        if (match && info) {
+            const valN = fatN.get(k)?.valor || 0;
+            const valN1 = fatN1.get(k)?.valor || 0;
+            const deltaVal = valN1 - valN;
+            const deltaPct = valN > 0 ? (deltaVal / valN * 100) : 100;
+
+            clientesFiltrados.push({
+                chave: k,
+                nome: info.nome || k,
+                doc: info.exemplo?.CNPJ || '',
+                tipoDoc: info.exemplo?.TipoDocumento || 'ND',
+                valorN: valN,
+                valorN1: valN1,
+                delta: deltaVal,
+                deltaPct: deltaPct
+            });
+        }
+    });
+
+    // Ordena por maior faturamento combinado (ou faturamento do ano ativo)
+    clientesFiltrados.sort((a, b) => Math.max(b.valorN, b.valorN1) - Math.max(a.valorN, a.valorN1));
+
+    // Salva para exportação posterior
+    _drilldownActiveList = clientesFiltrados;
+    _drilldownActiveFlow = `${origem} para ${destino} (${anoN} a ${anoN1})`;
+
+    // 4. Renderiza na tabela
+    document.getElementById('fid-drilldown-fluxo').innerText = `${origem} → ${destino}`;
+    document.getElementById('fid-drilldown-ano-n').innerText = anoN;
+    document.getElementById('fid-drilldown-ano-n1').innerText = anoN1;
+    
+    const tbody = document.getElementById('fid-drilldown-body');
+    if (tbody) {
+        if (clientesFiltrados.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="placeholder-text">Nenhum cliente neste fluxo.</td></tr>`;
+        } else {
+            tbody.innerHTML = clientesFiltrados.map(c => {
+                const docMasc = mascararDocumento(c.doc, c.tipoDoc);
+                const valNFmt = formatter.format(c.valorN);
+                const valN1Fmt = formatter.format(c.valorN1);
+                
+                let deltaFmt = formatter.format(c.delta);
+                let classDelta = 'delta-estavel';
+                if (c.delta > 0) {
+                    deltaFmt = `+${deltaFmt} (+${c.deltaPct.toFixed(1)}%)`;
+                    classDelta = 'delta-positivo';
+                } else if (c.delta < 0) {
+                    deltaFmt = `${deltaFmt} (${c.deltaPct.toFixed(1)}%)`;
+                    classDelta = 'delta-negativo';
+                } else {
+                    deltaFmt = `— (0.0%)`;
+                }
+
+                return `
+                    <tr>
+                        <td style="font-weight: 600;">${c.nome}</td>
+                        <td style="font-family: monospace; font-size: 11px;">${docMasc || '—'}</td>
+                        <td class="right">${valNFmt}</td>
+                        <td class="right">${valN1Fmt}</td>
+                        <td class="right ${classDelta}">${deltaFmt}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+
+    // 5. Exibe a seção de drill-down
+    const container = document.getElementById('fid-migracao-drilldown');
+    if (container) {
+        container.style.display = 'block';
+        container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+};
+
+window.fecharDrillDown = function() {
+    const container = document.getElementById('fid-migracao-drilldown');
+    if (container) container.style.display = 'none';
+    
+    document.querySelectorAll('.migracao-celula-interativa').forEach(el => {
+        el.classList.remove('cell-active');
+    });
+};
+
+window.exportarDrillDownCsv = function() {
+    if (!_drilldownActiveList || _drilldownActiveList.length === 0) {
+        alert('Nenhum dado para exportar.');
+        return;
+    }
+
+    const headers = ['Cliente', 'Documento', 'Faturamento Anterior', 'Faturamento Novo', 'Variacao (Delta)', 'Variacao (%)'];
+    const rows = _drilldownActiveList.map(c => [
+        c.nome,
+        c.doc,
+        c.valorN.toFixed(2),
+        c.valorN1.toFixed(2),
+        c.delta.toFixed(2),
+        c.deltaPct.toFixed(1)
+    ]);
+
+    const csvContent = "\uFEFF" + [
+        headers.join(';'),
+        ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `migracao_clientes_${_drilldownActiveFlow.toLowerCase().replace(/[^a-z0-9]/g, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+window.exportarListaAcionavel = function(tipo) {
+    let lista = [];
+    let titulo = '';
+    
+    if (tipo === 'perdidos') {
+        lista = _cachePerdidos;
+        titulo = 'clientes_perdidos_churn';
+    } else if (tipo === 'campeoes') {
+        lista = _cacheCampeoes;
+        titulo = 'novos_campeoes';
+    } else if (tipo === 'voltadores') {
+        lista = _cacheVoltadores;
+        titulo = 'clientes_resgatados_voltadores';
+    }
+    
+    if (!lista || lista.length === 0) {
+        alert('Nenhum dado para exportar.');
+        return;
+    }
+    
+    const selOrigem = document.getElementById('fid-migracao-ano-origem');
+    const selDestino = document.getElementById('fid-migracao-ano-destino');
+    const anoN = selOrigem ? selOrigem.value : '';
+    const anoN1 = selDestino ? selDestino.value : '';
+    
+    const headers = ['Cliente', 'Documento', 'Faturamento Ano Base', 'Faturamento Ano Comparado', 'Variacao (Delta)', 'Variacao (%)'];
+    const rows = lista.map(c => [
+        c.info.nome || c.chave,
+        c.doc,
+        c.valorN.toFixed(2),
+        c.valorN1.toFixed(2),
+        c.delta.toFixed(2),
+        c.deltaPct.toFixed(1)
+    ]);
+    
+    const csvContent = "\uFEFF" + [
+        headers.join(';'),
+        ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${titulo}_${anoN}_para_${anoN1}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
 

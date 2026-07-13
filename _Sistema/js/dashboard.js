@@ -70,6 +70,7 @@ function updateContextBanner() {
  * Deve ser chamada sempre que qualquer filtro mudar ou novos dados forem carregados.
  */
 function updateDashboard() {
+    if (typeof window.updateFilterIndicator === 'function') window.updateFilterIndicator();
     const data = getFilteredData();
     if (data.length === 0) {
         // Zera os KPIs e avisa — em vez de travar silenciosamente no último estado
@@ -77,10 +78,12 @@ function updateDashboard() {
             const el = document.getElementById(id);
             if (el) el.innerText = 'R$ 0,00';
         });
-        ['kpi-quantidade','kpi-familia'].forEach(id => {
+        ['kpi-quantidade'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.innerText = '0';
         });
+        const mixEl0 = document.getElementById('kpi-mix');
+        if (mixEl0) mixEl0.innerText = '-';
         ['kpi-meta-faturamento','kpi-meta-quantidade',
          'kpi-yoy-faturamento','kpi-yoy-quantidade'].forEach(id => {
             const el = document.getElementById(id);
@@ -232,7 +235,7 @@ function updateDashboard() {
     const filterCentro = window.getCheckedCentros();
     const anoTextMeta  = filterAno !== "ALL" ? filterAno : "Anual";
 
-    document.getElementById('kpi-prog-meta-title').innerText    = `Faturamento/Meta ${anoTextMeta}`;
+    document.getElementById('kpi-prog-meta-title').innerText    = `Faturamento vs Meta ${anoTextMeta}`;
     document.getElementById('kpi-prog-meta-acum-lbl').innerText = `Acumulado ${anoTextMeta}(%):`;
 
     if (globalMetas.length > 0) {
@@ -289,7 +292,7 @@ function updateDashboard() {
     if (anoRef && anoAntStr) {
         const hasPrevYear = globalData.some(d => d.Ano === anoAntStr);
 
-        document.getElementById('kpi-prog-yoy-title').innerText    = `Faturamento ${anoRef}/${anoAntStr}`;
+        document.getElementById('kpi-prog-yoy-title').innerText    = `Crescimento ${anoRef} vs ${anoAntStr}`;
         document.getElementById('kpi-prog-yoy-acum-lbl').innerText = `Acumulado ${anoAntStr}(%):`;
 
         if (hasPrevYear) {
@@ -297,23 +300,21 @@ function updateDashboard() {
             const fatAnoRef = data.filter(d => d.Ano === anoRef).reduce((a, b) => a + b.Valor, 0);
             const mesesComDadosRef = [...new Set(data.filter(d => d.Ano === anoRef && d.Valor > 0).map(d => d.Mes))];
 
-            const prevParcial = globalData.filter(d =>
-                d.Ano === anoAntStr &&
-                (filterCentro === "ALL" || (Array.isArray(filterCentro) && filterCentro.includes(d.Centro))) &&
-                mesesComDadosRef.includes(d.Mes) &&
-                d.Cliente !== 'NÃO IDENTIFICADO' && d.Cliente !== 'ND'
-            ).reduce((a, b) => a + b.Valor, 0);
+            // Usa getFilteredDataByYear() (filters.js) para manter Centro/UF/Cliente/
+            // Tipo de Operação consistentes com o restante do painel — filtrar
+            // globalData diretamente aqui já causou divergência com o KPI principal
+            // (ver renderMatrix/renderMatrixFamilias em tables.js).
+            const prevParcial = getFilteredDataByYear(anoAntStr)
+                .filter(d => mesesComDadosRef.includes(d.Mes))
+                .reduce((a, b) => a + b.Valor, 0);
 
             const fatParaComparar = filterAno !== "ALL" ? faturamentoTotal : fatAnoRef;
             const percYoYParcial = prevParcial > 0 ? (fatParaComparar / prevParcial) * 100 : 0;
             document.getElementById('kpi-prog-yoy-parcial').innerText =
                 percYoYParcial > 0 ? percYoYParcial.toFixed(2).replace('.', ',') + '%' : "-";
 
-            const prevAnoInteiro = globalData.filter(d =>
-                d.Ano === anoAntStr &&
-                (filterCentro === "ALL" || (Array.isArray(filterCentro) && filterCentro.includes(d.Centro))) &&
-                d.Cliente !== 'NÃO IDENTIFICADO' && d.Cliente !== 'ND'
-            ).reduce((a, b) => a + b.Valor, 0);
+            const prevAnoInteiro = getFilteredDataByYear(anoAntStr)
+                .reduce((a, b) => a + b.Valor, 0);
 
             const percYoYAcum = prevAnoInteiro > 0 ? (fatParaComparar / prevAnoInteiro) * 100 : 0;
             document.getElementById('kpi-prog-yoy-acum').innerText =
@@ -323,7 +324,7 @@ function updateDashboard() {
             document.getElementById('kpi-prog-yoy-acum').innerText    = "Sem dados " + anoAntStr;
         }
     } else {
-        document.getElementById('kpi-prog-yoy-title').innerText   = "Faturam. Ano/Ant";
+        document.getElementById('kpi-prog-yoy-title').innerText   = "Crescimento vs Ano Anterior";
         document.getElementById('kpi-prog-yoy-parcial').innerText = "-";
         document.getElementById('kpi-prog-yoy-acum').innerText    = "-";
     }
@@ -333,10 +334,33 @@ function updateDashboard() {
     // -------------------------------------------------------------------------
     document.getElementById('kpi-ticket').innerText = formatter.format(qtdTotal > 0 ? faturamentoTotal / qtdTotal : 0);
 
-    const agrupadoFamilia = groupBySum(data, 'Familia', 'Valor').sort((a, b) => b.valor - a.valor);
-    if (agrupadoFamilia.length > 0) {
-        document.getElementById('kpi-familia').innerText = agrupadoFamilia[0].chave;
+    // --- Mix Serviço × Produto (usa o campo TipoOperacao) ---
+    // Serviço + Produto podem não somar 100%: o restante é "Não Classificado"
+    // (bases antigas sem a coluna Operação de faturamento caem todas aqui).
+    const fatServico = data.reduce((a, d) => a + (d.TipoOperacao === 'Serviço' ? d.Valor : 0), 0);
+    const fatProduto = data.reduce((a, d) => a + (d.TipoOperacao === 'Produto' ? d.Valor : 0), 0);
+    const mixEl  = document.getElementById('kpi-mix');
+    const mixSub = document.getElementById('kpi-mix-sub');
+    if (mixEl) {
+        if (faturamentoTotal > 0) {
+            const pServ = fatServico / faturamentoTotal * 100;
+            const pProd = fatProduto / faturamentoTotal * 100;
+            const pNaoClass = Math.max(0, 100 - pServ - pProd);
+            mixEl.innerHTML =
+                `<span style="color:var(--tecpar-green);">Serv ${pServ.toFixed(0)}%</span>` +
+                ` · <span style="color:var(--tecpar-blue);">Prod ${pProd.toFixed(0)}%</span>`;
+            if (mixSub) {
+                mixSub.innerText = pNaoClass >= 0.5
+                    ? `${pNaoClass.toFixed(0)}% não classificado`
+                    : '% do faturamento';
+            }
+        } else {
+            mixEl.innerText = '-';
+            if (mixSub) mixSub.innerText = '% do faturamento';
+        }
     }
+
+    const agrupadoFamilia = groupBySum(data, 'Familia', 'Valor').sort((a, b) => b.valor - a.valor);
 
     // -------------------------------------------------------------------------
     // 6. Top 15 Clientes e Produtos/Serviços
@@ -370,7 +394,8 @@ function updateDashboard() {
 
     // Atualiza a aba de Configurações se estiver visível
     const tabConfig = document.getElementById('tab-config');
-    if (tabConfig && tabConfig.style.display !== 'none' && typeof renderSetorReview === 'function') {
-        renderSetorReview();
+    if (tabConfig && tabConfig.style.display !== 'none') {
+        if (typeof renderSetorReview === 'function') renderSetorReview();
+        if (typeof renderTipoReview === 'function') renderTipoReview();
     }
 }

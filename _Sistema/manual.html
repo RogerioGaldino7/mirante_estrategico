@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manual do Usuário | Mirante Estratégico Tecpar</title>
-    <link rel="shortcut icon" href="Imagem/favicon.png" type="image/x-icon">
-    <link rel="icon" href="Imagem/favicon.png" type="image/png">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -276,7 +274,8 @@
                 <li><a href="#cap3"><i class="fas fa-chart-line"></i> Faturamento</a></li>
                 <li><a href="#cap4"><i class="fas fa-bullseye"></i> Inteligência</a></li>
                 <li><a href="#cap5"><i class="fas fa-handshake"></i> Fidelidade</a></li>
-                <li><a href="#cap6"><i class="fas fa-cogs"></i> Configurações</a></li>
+                <li><a href="#cap6"><i class="fas fa-file-pdf"></i> Relatório</a></li>
+                <li><a href="#cap7"><i class="fas fa-cogs"></i> Configurações</a></li>
             </ul>
         </div>
     </aside>
@@ -290,17 +289,33 @@
             
             <img src="Imagem/manual/cap1_upload.png" alt="Botões de Upload">
 
-            <h3>Como inserir os dados:</h3>
+            <h3>Como inserir os dados (fluxo recomendado):</h3>
             <ol>
-                <li>Abra o arquivo <code>index.html</code> no seu navegador.</li>
-                <li>No canto superior direito, clique em <strong>"Carregar Base(s) de Dados"</strong>.</li>
-                <li>Selecione os arquivos CSV (ex: <code>base_2024.CSV</code>). Segure <code>Ctrl</code> para múltiplos arquivos.</li>
+                <li>Abra o Dashboard (atalho <code>🚀_ABRIR_DASHBOARD.html</code>) no Chrome ou Edge.</li>
+                <li>No canto superior direito, clique em <strong>"📂 Importar Pasta de Bases"</strong>.</li>
+                <li>Selecione a pasta <code>_Bases_para_Upload</code> inteira e confirme.</li>
             </ol>
-            
+            <p>O sistema identifica sozinho o que é o quê pelas subpastas: <strong>Faturamento</strong>
+            (arquivos <code>base_AAAA.CSV</code> — o ano vem do nome do arquivo), <strong>Metas</strong>,
+            <strong>OrdemVendas</strong> e, se existir, um <code>setor.csv</code> com a classificação
+            setorial. Tudo é carregado de uma vez, na ordem correta.</p>
+
+            <div class="alert alert-tip">
+                <i class="fas fa-lightbulb"></i>
+                <div>
+                    <strong>Alternativa:</strong> na tela de boas-vindas (antes de carregar dados), o botão
+                    <strong>"📁 Carregar Base(s) de Dados"</strong> permite selecionar apenas os CSVs de
+                    faturamento (segure <code>Ctrl</code> para múltiplos anos).
+                </div>
+            </div>
+
             <div class="alert">
                 <i class="fas fa-exclamation-triangle"></i>
                 <div>
-                    <strong>Atenção ao Formato:</strong> Certifique-se que o CSV possui a coluna "CNPJ ou CPF" para o correto funcionamento da análise de fidelidade.
+                    <strong>Atenção ao Formato:</strong> o CSV deve ser a exportação atual do cubo Benner —
+                    com as colunas "Operação de faturamento" (2ª) e "CNPJ ou CPF" (8ª). Além disso, apenas
+                    operações de <em>venda</em> (códigos 2001–2004 e 3003) entram na análise; as demais são
+                    descartadas automaticamente.
                 </div>
             </div>
         </div>
@@ -311,6 +326,8 @@
             <ul>
                 <li><strong>Tempo:</strong> Filtre por ano ou meses específicos para analisar sazonalidades.</li>
                 <li><strong>Centro de Custo:</strong> Isole departamentos específicos ou veja a visão consolidada.</li>
+                <li><strong>Tipo de Operação:</strong> Separe <em>Serviços</em> de <em>Produtos</em> (a classificação
+                    de cada família pode ser auditada na aba Configurações).</li>
                 <li><strong>UF (Estado):</strong> Filtre por regiões geográficas.</li>
                 <li><strong>Busca de Clientes:</strong> Use para localizar um cliente específico ou desmarcar "outliers".</li>
             </ul>
@@ -321,15 +338,17 @@
                     <p style="text-align: center; font-size: 0.8rem; color: #666;">Filtros de Tempo e Centro de Custo</p>
                 </div>
                 <div>
-                    <img src="Imagem/manual/cap2_filtros_2.png" alt="Filtros UF e Clientes">
-                    <p style="text-align: center; font-size: 0.8rem; color: #666;">Filtros de Meses, UF e Clientes</p>
+                    <img src="Imagem/manual/cap2_filtros_2.png" alt="Filtros Meses, Tipo de Operação, UF e Clientes">
+                    <p style="text-align: center; font-size: 0.8rem; color: #666;">Filtros de Meses, Tipo de Operação, UF e Clientes</p>
                 </div>
             </div>
 
             <div class="alert alert-tip">
                 <i class="fas fa-lightbulb"></i>
                 <div>
-                    <strong>Dica de Produtividade:</strong> Para resetar um filtro rapidamente, clique em "Selecionar Tudo" no topo de cada lista.
+                    <strong>Dica de Produtividade:</strong> o botão <strong>"Limpar"</strong> no topo da barra
+                    lateral restaura todos os filtros ao padrão de uma vez. O selo laranja ao lado do título
+                    indica quantos filtros estão ativos.
                 </div>
             </div>
         </div>
@@ -388,12 +407,66 @@
         </div>
 
         <div id="cap6" class="section">
-            <h2><i class="fas fa-cogs"></i> Capítulo 6: Configurações e Revisão</h2>
-            <p>O algoritmo classifica os clientes automaticamente, mas você tem o controle final para auditar os dados.</p>
-            
+            <h2><i class="fas fa-file-pdf"></i> Capítulo 6: Aba Relatório</h2>
+            <p>Transforma a visão atual do painel em documentos prontos para distribuição — sempre
+            respeitando os filtros ativos na barra lateral (Ano, Centro, Meses...).</p>
+
+            <h3>1. Relatório Estratégico (blocos)</h3>
+            <p>Marque os blocos desejados (KPIs, gráfico de famílias, Top 15, mapa do Brasil...),
+            clique em <strong>"🔍 Pré-visualizar"</strong> para conferir e em
+            <strong>"📄 Baixar PDF"</strong> para gerar o arquivo.</p>
+
+            <img src="Imagem/manual/cap6_relatorio_1.png" alt="Aba Relatório: montagem de blocos e pré-visualização">
+
+            <h3>2. Relatório PN (modelo diretoria)</h3>
+            <p>Réplica em PDF (A4 paisagem) do relatório de acompanhamento do PN: capa com destaques,
+            tabelas consolidadas de Serviços/Produtos com velocímetros de meta, gráficos por centro,
+            Top 15 e páginas de detalhe por centro (famílias e Ordens de Venda).</p>
+            <ul>
+                <li>As caixas <strong>Serviços/Produtos</strong> controlam quais seções entram no PDF.</li>
+                <li>Em <strong>"📝 Capa: destaques e contrato"</strong> você edita os textos da capa e os
+                    dados do contrato de vacinas — eles ficam salvos no navegador para reuso mensal.</li>
+                <li><strong>"▶️ Apresentar (tela cheia)"</strong> exibe as páginas como slides
+                    (setas/clique para navegar, <code>Esc</code> para sair) — ideal para reuniões.</li>
+            </ul>
+
+            <div class="alert">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>
+                    <strong>Paciência na primeira geração:</strong> o relatório PN completo (todos os centros)
+                    captura ~23 páginas e pode levar cerca de 1 minuto. Depois da pré-visualização, gerar o
+                    PDF ou apresentar é instantâneo (as capturas são reaproveitadas).
+                </div>
+            </div>
+        </div>
+
+        <div id="cap7" class="section">
+            <h2><i class="fas fa-cogs"></i> Capítulo 7: Configurações e Revisão</h2>
+            <p>O algoritmo classifica automaticamente, mas você tem o controle final para auditar os dados.
+            A aba reúne duas revisões:</p>
+
+            <h3>1. Classificação de Famílias (Serviços × Produtos)</h3>
+            <p>Define se cada família conta como <strong>Serviço</strong> ou <strong>Produto</strong> nos
+            painéis e no filtro "Tipo de Operação". O padrão automático classifica o CVI como Produto e os
+            demais centros como Serviço; use o seletor da linha para forçar manualmente (a linha fica
+            marcada como <strong>MANUAL</strong>).</p>
+
+            <h3>2. Revisão Setorial (Público × Privado)</h3>
+            <p>Auditoria da classificação de clientes usada na aba Fidelidade e nas análises por setor.</p>
+
             <img src="Imagem/manual/cap6_configuracao_1.png" alt="Tela de Configurações">
 
-            <p>Se notar uma classificação errada, troque para manual. Clique em <strong>"Baixar Classificação"</strong> para salvar um backup.</p>
+            <p>Se notar uma classificação errada, troque para manual. Clique em
+            <strong>"Baixar Classificação (CSV)"</strong> para salvar um backup.</p>
+
+            <div class="alert">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>
+                    <strong>As correções ficam neste navegador:</strong> os ajustes manuais são gravados no
+                    armazenamento local do navegador (não no CSV). Em outro computador ou navegador, eles não
+                    aparecem — por isso o backup em CSV é importante para compartilhar a classificação.
+                </div>
+            </div>
         </div>
 
     </main>

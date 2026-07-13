@@ -45,11 +45,10 @@ function renderList(elementId, allItems, nameSingular, namePlural) {
 
     items.forEach((it, idx) => {
         topTotal += it.valor;
-        const shortName = it.chave.length > 50 ? it.chave.substring(0, 48) + "..." : it.chave;
         el.innerHTML += `<tr class="ranking-row">
             <td class="ranking-name" title="${it.chave}" data-rank="${idx + 1}">
-                <div class="ranking-name-text" style="max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${shortName}
+                <div class="ranking-name-text" style="white-space: normal; overflow-wrap: break-word; line-height: 1.2;">
+                    ${it.chave}
                 </div>
             </td>
             <td class="right ranking-value" style="font-weight: 600; width: 120px;">
@@ -88,7 +87,6 @@ function renderMatrix() {
     const anoAtualStr = fAno !== "ALL" ? fAno : "2026";
     const anoAntStr   = (fAno !== "ALL" && !isNaN(parseInt(fAno))) ? String(parseInt(fAno) - 1) : "Anterior";
     const fCentro   = window.getCheckedCentros();
-    const fUf       = document.getElementById('filter-uf').value;
     const mesesOrdem = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
     let checkedMeses = Array.from(document.querySelectorAll('.mes-checkbox:checked')).map(cb => cb.value);
@@ -106,21 +104,17 @@ function renderMatrix() {
     theadHTML += `<th style="text-align: right; background-color: #595959; padding: 6px 10px;">Total</th>`;
     theadTr.innerHTML = theadHTML;
 
-    const filterData = (yr) => globalData.filter(d => {
-        if (d.Ano !== yr) return false;
-        if (fCentro !== "ALL" && Array.isArray(fCentro) && !fCentro.includes(d.Centro)) return false;
-        if (fUf !== "ALL" && d.UF !== fUf) return false;
-        
-        return true;
-    });
     const filterMetas = (yr) => globalMetas.filter(m => {
         if (m.Ano !== yr) return false;
         if (fCentro !== "ALL" && Array.isArray(fCentro) && !fCentro.includes(m.Centro)) return false;
         return true;
     });
 
-    const currData  = filterData(anoAtualStr);
-    const prevData  = filterData(anoAntStr);
+    // Usa getFilteredDataByYear() (filters.js) para manter Centro/UF/Cliente/
+    // Tipo de Operação consistentes com o restante do painel — não duplicar
+    // a lógica de filtro aqui (já causou divergência com o KPI principal).
+    const currData  = getFilteredDataByYear(anoAtualStr);
+    const prevData  = getFilteredDataByYear(anoAntStr);
     const currMetas = filterMetas(anoAtualStr);
 
     let rCurrFat = Array(checkedMeses.length).fill(0);
@@ -180,7 +174,6 @@ function renderMatrixFamilias() {
     const fAno       = document.getElementById('filter-ano')?.value ?? "ALL";
     const anoAtualStr = fAno !== "ALL" ? fAno : "2026";
     const fCentro    = window.getCheckedCentros();
-    const fUf        = document.getElementById('filter-uf').value;
     const mesesOrdem = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
     let checkedMeses = Array.from(document.querySelectorAll('.mes-checkbox:checked')).map(cb => cb.value);
@@ -193,20 +186,14 @@ function renderMatrixFamilias() {
         return;
     }
 
-    const baseFilter = (yr) => globalData.filter(d => {
-        if (d.Ano !== yr) return false;
-        if (fCentro !== "ALL" && Array.isArray(fCentro) && !fCentro.includes(d.Centro)) return false;
-        if (fUf !== "ALL" && d.UF !== fUf) return false;
-        
-        return true;
-    });
     const metaFilter = (yr) => globalMetas.filter(m => {
         if (m.Ano !== yr) return false;
         if (fCentro !== "ALL" && Array.isArray(fCentro) && !fCentro.includes(m.Centro)) return false;
         return true;
     });
 
-    const currData  = baseFilter(anoAtualStr);
+    // Usa getFilteredDataByYear() (filters.js) — ver nota em renderMatrix().
+    const currData  = getFilteredDataByYear(anoAtualStr);
     const currMetas = metaFilter(anoAtualStr);
 
     // Monta cabeçalho duplo (meses + métricas)

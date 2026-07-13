@@ -10,8 +10,28 @@
  * O ano é extraído do nome do arquivo via regex (ex: base_2026.CSV → "2026").
  */
 document.getElementById('csvFileInput').addEventListener('change', function (e) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    // Captura os File antes de mexer no input — limpar e.target.value esvazia o FileList
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // O painel NÃO acumula uploads: cada carga substitui globalData por completo.
+    // Como a análise ano-a-ano exige selecionar todos os CSVs de uma só vez,
+    // avisamos antes de descartar silenciosamente uma base já carregada.
+    if (typeof globalData !== 'undefined' && globalData.length > 0) {
+        const anosAtuais = [...new Set(globalData.map(d => d.Ano))].sort().join(', ');
+        const ok = confirm(
+            `Atenção: a base atual (${anosAtuais}) será SUBSTITUÍDA pelos novos arquivos.\n\n` +
+            "Para comparar anos (ex: 2025 × 2026), selecione todos os CSVs de uma " +
+            "só vez na janela de seleção (Ctrl+clique em cada arquivo).\n\n" +
+            "Deseja continuar e substituir a base atual?"
+        );
+        if (!ok) {
+            e.target.value = "";
+            return;
+        }
+    }
+    // Permite re-selecionar o mesmo arquivo depois (change não dispara com value igual)
+    e.target.value = "";
 
     const total = files.length;
     document.getElementById('file-status').innerText = `Lendo ${total} base(s)...`;
@@ -197,6 +217,120 @@ document.getElementById('csvOVInput').addEventListener('change', function (e) {
         }
     });
 });
+
+// -----------------------------------------------------------------------------
+// Upload de Pasta Completa (Processamento Dinâmico)
+// -----------------------------------------------------------------------------
+const folderInputEl = document.getElementById('folderInput');
+if (folderInputEl) {
+    folderInputEl.addEventListener('change', async function (e) {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        // Limpa input para permitir nova seleção
+        e.target.value = "";
+
+        // Identifica os arquivos pelos caminhos e nomes
+        const faturamentoFiles = files.filter(f => f.webkitRelativePath.includes('Faturamento') && f.name.toUpperCase().endsWith('.CSV') && !f.name.endsWith('.bak'));
+        const metasFiles = files.filter(f => f.webkitRelativePath.includes('Metas') && f.name.toUpperCase().endsWith('.CSV') && !f.name.endsWith('.bak'));
+        const ovFiles = files.filter(f => f.webkitRelativePath.includes('OrdemVendas') && f.name.toUpperCase().endsWith('.CSV') && !f.name.endsWith('.bak'));
+        const setorFiles = files.filter(f => f.name.toLowerCase() === 'setor.csv');
+        
+        const total = faturamentoFiles.length + metasFiles.length + ovFiles.length;
+        if (total === 0) {
+            alert('Nenhum arquivo de base, metas ou OV encontrado na pasta selecionada.');
+            return;
+        }
+
+        const ok = confirm(`Encontrados na pasta:\n- ${faturamentoFiles.length} arquivos de Faturamento\n- ${metasFiles.length} arquivos de Metas\n- ${ovFiles.length} arquivos de Ordem de Vendas\n\nDeseja carregar todos eles e substituir os dados atuais do painel?`);
+        if (!ok) return;
+
+        if (typeof showLoading === 'function') {
+            showLoading('Lendo pasta de bases...', `Carregando ${total} arquivos`);
+        }
+
+        document.getElementById('file-status').innerText = `Faturamento: ${faturamentoFiles.length}`;
+        document.getElementById('meta-status').innerText = `Metas: ${metasFiles.length}`;
+        document.getElementById('ov-status').innerText = `OVs: ${ovFiles.length}`;
+
+        // Helper para o PapaParse em Promise
+        const parseCSV = (file, isOV) => new Promise((resolve, reject) => {
+            Papa.parse(file, {
+                delimiter: ";",
+                encoding: "ISO-8859-1",
+                skipEmptyLines: !isOV,
+                complete: function (results) {
+                    if (results.errors && results.errors.length > 0) {
+                        console.warn(`[FolderLoader] Avisos no arquivo ${file.name}:`, results.errors);
+                    }
+                    if (!isOV) {
+                        const yearMatch = file.name.match(/(\d{4})/);
+                        const yearAssigned = yearMatch ? yearMatch[1] : "Ano Desconhecido";
+                        results.data.forEach(row => row.push(yearAssigned));
+                    }
+                    resolve(results.data);
+                },
+                error: reject
+            });
+        });
+
+        try {
+            // 0. Classificação setorial (setor.csv na pasta, se existir) —
+            //    carrega antes do faturamento para os overrides já valerem
+            //    quando o dashboard renderizar.
+            if (setorFiles.length > 0) {
+                if (typeof updateLoading === 'function') updateLoading('Aplicando classificação setorial...');
+                const setorData = await new Promise((resolve, reject) => {
+                    Papa.parse(setorFiles[0], {
+                        delimiter:      ";",
+                        encoding:       "ISO-8859-1",
+                        skipEmptyLines: true,
+                        complete: r => resolve(r.data),
+                        error: reject
+                    });
+                });
+                processarSetorCsv(setorData);
+            }
+
+            // 1. OVs
+            if (ovFiles.length > 0) {
+                if (typeof updateLoading === 'function') updateLoading('Processando OVs...');
+                const ovData = await parseCSV(ovFiles[0], true); // Assume a primeira OV encontrada
+                processOVData(ovData);
+            }
+
+            // 2. Metas
+            if (metasFiles.length > 0) {
+                if (typeof updateLoading === 'function') updateLoading('Processando Metas...');
+                let allMetas = [];
+                for (let f of metasFiles) {
+                    const data = await parseCSV(f, false);
+                    allMetas = allMetas.concat(data);
+                }
+                processMeData(allMetas);
+            }
+
+            // 3. Faturamento (O Faturamento chama o redesenho dos filtros, então carrega por último)
+            if (faturamentoFiles.length > 0) {
+                if (typeof updateLoading === 'function') updateLoading('Processando Faturamento...');
+                let allFaturamento = [];
+                for (let f of faturamentoFiles) {
+                    const data = await parseCSV(f, false);
+                    allFaturamento = allFaturamento.concat(data);
+                }
+                processData(allFaturamento);
+            }
+
+            if (typeof window.collapseMobileFilters === 'function') window.collapseMobileFilters();
+            
+        } catch (err) {
+            console.error('[FolderLoader] Erro ao carregar pasta:', err);
+            alert('Ocorreu um erro ao ler os arquivos da pasta:\n' + err.message);
+        } finally {
+            if (typeof hideLoading === 'function') hideLoading();
+        }
+    });
+}
 
 // -----------------------------------------------------------------------------
 // Modo de desenvolvimento: carregamento automático das bases padrão

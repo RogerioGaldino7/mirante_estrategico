@@ -31,9 +31,11 @@ function renderTipoReview() {
             if (!familiasMap.has(fUpper)) {
                 familiasMap.set(fUpper, {
                     Familia: f,
-                    Centro: d.Centro,
+                    Centros: new Set([d.Centro]),
                     ValorTotal: 0
                 });
+            } else {
+                familiasMap.get(fUpper).Centros.add(d.Centro);
             }
             familiasMap.get(fUpper).ValorTotal += d.Valor;
         });
@@ -49,9 +51,11 @@ function renderTipoReview() {
             if (!familiasMap.has(fUpper)) {
                 familiasMap.set(fUpper, {
                     Familia: f,
-                    Centro: m.Centro,
+                    Centros: new Set([m.Centro]),
                     ValorTotal: 0
                 });
+            } else {
+                familiasMap.get(fUpper).Centros.add(m.Centro);
             }
         });
     }
@@ -67,12 +71,33 @@ function renderTipoReview() {
     let rows = Array.from(familiasMap.values()).map(c => {
         const fUpper = c.Familia.toUpperCase();
         const hasOverride = !!TIPO_OVERRIDES[fUpper];
-        const isCVI = c.Centro.toUpperCase().includes('IMUNOBIOL') || c.Centro === 'CENTRO DE IMUNOBIOLÓGICOS VETERINÁRIOS';
-        const autoTipo = isCVI ? 'Produto' : 'Serviço';
+        
+        let hasCVI = false;
+        let hasNonCVI = false;
+        c.Centros.forEach(centro => {
+            const upper = centro.toUpperCase();
+            if (upper.includes('IMUNOBIOL') || upper === 'CENTRO DE IMUNOBIOLÓGICOS VETERINÁRIOS') {
+                hasCVI = true;
+            } else {
+                hasNonCVI = true;
+            }
+        });
+
+        let autoTipo;
+        if (hasCVI && hasNonCVI) {
+            autoTipo = 'Misto (Produto/Serviço)';
+        } else if (hasCVI) {
+            autoTipo = 'Produto';
+        } else {
+            autoTipo = 'Serviço';
+        }
+
         const finalTipo = hasOverride ? TIPO_OVERRIDES[fUpper] : autoTipo;
+        const centrosLabel = Array.from(c.Centros).sort().join(', ');
 
         return {
             ...c,
+            centrosLabel,
             autoTipo,
             finalTipo,
             hasOverride
@@ -81,7 +106,7 @@ function renderTipoReview() {
 
     // 4. Aplicar busca por texto (nome da Família)
     if (filterText) {
-        rows = rows.filter(r => r.Familia.toUpperCase().includes(filterText) || r.Centro.toUpperCase().includes(filterText));
+        rows = rows.filter(r => r.Familia.toUpperCase().includes(filterText) || r.centrosLabel.toUpperCase().includes(filterText));
     }
 
     // 5. Aplicar filtro por Tipo Atual
@@ -132,7 +157,7 @@ function renderTipoReview() {
             html += `
             <tr style="border-bottom: 1px solid #eee; transition: background 0.2s; ${bgStyle}">
                 <td style="padding: 10px 12px; font-size: 12px; font-weight: 600;">${c.Familia}</td>
-                <td style="padding: 10px 12px; font-size: 12px; color: #555;">${c.Centro}</td>
+                <td style="padding: 10px 12px; font-size: 12px; color: #555;">${c.centrosLabel}</td>
                 <td style="padding: 10px 12px; font-size: 12px; font-weight: 500;">${c.finalTipo}</td>
                 <td style="padding: 10px 12px; text-align: center;">${badgeOrigem}</td>
                 <td style="padding: 10px 12px; text-align: right;">${selectHtml}</td>
